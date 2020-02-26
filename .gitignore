@@ -1,3 +1,12 @@
+# big model
+part3_31-07-19_BrAInet_pytorch
+
+# faistai courses
+course-v3
+
+# pycharm
+.idea
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -5,8 +14,6 @@ __pycache__/
 
 # C extensions
 *.so
-
-.idea
 
 # Distribution / packaging
 .Python
