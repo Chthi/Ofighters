@@ -106,8 +106,8 @@ class BrAIn(Agent):
     """Ship is smart. Ship can use brain."""
 
     def __init__(self):
-        # we define our own bot called brAIn with a behavior define by the function brAIn_play
-        super().__init__(behavior="brAIn", bot=self.brAIn_play)
+        # we define our own bot called brAIn with a behavior define by the function brAIn_plays
+        super().__init__(behavior="brAIn", bot=self)
         # the neural network that can controls the ship actions
 
         self.model = torch.load(os.path.join(NETWORKS_FOLDER, MODEL+"_pytorch"), map_location='cpu')
@@ -121,7 +121,7 @@ class BrAIn(Agent):
 
 
 
-    def brAIn_play(self, obs):
+    def play(self, obs):
         # reward the networks with the last reward get
         # self.network.update_network_with_reward(self.reward)
         # print(self.network.weights_layers[-1])

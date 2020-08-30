@@ -23,9 +23,12 @@ import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 
 from laser import Laser
+from observation import DEFAULT_WIDTH, DEFAULT_HEIGHT
 from action import Action
+from one_hot_action import ActionOneHot
 from agent import Agent
-from brAIn import BrAIn
+# from brAIn import BrAIn
+from qlearnIA import QlearnIA
 
 SHIPS_SPEED = 8
 PLAYER_FOLLOWS_NETWORK_RULES = True
@@ -66,8 +69,11 @@ class Ship():
         self.player = None
         # TODO improve. for the moment the score and steps are reset if the bot change in the middle
         if behavior == "network":
-            self.agent = Agent("network", bot=BrAIn().brAIn_play)
-            self.initial_agent = Agent("network", bot=BrAIn().brAIn_play)
+            self.agent = BrAIn()
+            self.initial_agent = BrAIn()
+        elif behavior == "q_learning":
+            self.agent = QlearnIA()
+            self.initial_agent = QlearnIA()
         else:
             self.agent = Agent(behavior)
             self.initial_agent = Agent(behavior)
@@ -229,9 +235,14 @@ class Ship():
         # training reward depending on position
         # self.agent.reward = self.go_bottom_reward()
 
-        if action.pointing:
-            self.pointing = action.pointing
-            # print("turn ", self.direction)
+        if isinstance(action, ActionOneHot):
+            if action.pointing:
+                self.pointing = Point(randint(0, DEFAULT_WIDTH-1), randint(0, DEFAULT_HEIGHT-1))
+        elif isinstance(action, Action):
+            if action.pointing:
+                self.pointing = action.pointing
+        # print("turn ", self.direction)
+
         if action.thrust:
             self.thrust()
         if action.shoot:

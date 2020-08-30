@@ -26,12 +26,13 @@ from ship import Ship
 from laser import Laser
 from action import Action
 from observation import Observation, DEFAULT_WIDTH, DEFAULT_HEIGHT
-from brAIn import NETWORKS_FOLDER, BrAIn, SimpleModel
+# from brAIn import NETWORKS_FOLDER, BrAIn, SimpleModel
+NETWORKS_FOLDER = "ofighter_networks"
 
 from map_menu_struct import *
 from fps_manager import fps, fps_manager
 
-from renforcement_learning_neural_network import Renforcement_learning_neural_network
+# from renforcement_learning_neural_network import Renforcement_learning_neural_network
 
 import matplotlib
 # While GTK isn't avail everywhere, we use TkAgg backend to generate png
@@ -52,7 +53,7 @@ SHIPS_NUMBER = 7
 
 MAP_PRECISION = 4
 
-MAX_TIME = 300
+MAX_TIME = 200
 ANTICIPATION = 100
 
 
@@ -214,7 +215,9 @@ class Battleground():
 
         for x in range(self.ships_number):
             # network random
-            self.ships.append(Ship(randint(0, largeur), randint(0, hauteur), self, behavior="network"))
+            # self.ships.append(Ship(randint(0, largeur), randint(0, hauteur), self, behavior="network"))
+            self.ships.append(Ship(randint(0, largeur), randint(0, hauteur), self, behavior="q_learning"))
+            # self.ships.append(Ship(randint(0, largeur), randint(0, hauteur), self, behavior="random"))
 
         # print("there")
         # self.time_list = [self.time]

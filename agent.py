@@ -30,31 +30,38 @@ from couple import Point
 class Agent():
 
     def __init__(self, behavior=None, bot=None):
+        """
+        :param bot: object with a "play" method
+        """
         self.score = 0
+        self.scores = []
         self.reward = 0
         self.steps = 0
+        self.total_steps = 0
+        self.episode = 0
         self.behavior = behavior
 
         self.obs_vector = np.array([])
         self.act_vector = np.array([])
 
-        if not behavior or behavior == "idle":
-            self.bot = self.idlebot
+        self.bot = None
+        if bot:
+            self.bot = bot
+            self.bot_play = bot.play
+        elif not behavior or behavior == "idle":
+            self.bot_play = self.idlebot
         elif behavior == "random":
-            self.bot = self.random_play
+            self.bot_play = self.random_play
         elif behavior == "turret":
-            self.bot = self.crazy_turret
+            self.bot_play = self.crazy_turret
         elif behavior == "runner":
-            self.bot = self.crazy_runner
+            self.bot_play = self.crazy_runner
         elif behavior == "thrust":
-            self.bot = self.never_back_down
+            self.bot_play = self.never_back_down
         elif behavior == "shoot":
-            self.bot = self.mass_shooter
+            self.bot_play = self.mass_shooter
         else:
-            if not bot:
-                raise Exception("You must give a bot in parameter or select an existing behavior.")
-            else:
-                self.bot = bot
+            raise Exception("You must give a bot in parameter or select an existing behavior.")
 
         #    advanced bots
         # scared bot
@@ -62,9 +69,17 @@ class Agent():
         # snipe bot
         # dodge bot
 
+    def reset(self):
+        if self.bot:
+            self.bot.reset()
+        self.steps = 0
+        self.scores.append(self.score)
+        self.score = 0
+        self.episode += 1
 
     def step(self, obs):
         self.steps += 1
+        self.total_steps += 1
 
         if obs.reward != 0:
             print(self.reward)
@@ -73,7 +88,7 @@ class Agent():
         self.reward = 0
 
         self.obs_vector = obs.vector
-        action = self.bot(obs)
+        action = self.bot_play(obs)
         self.act_vector = action.vector
 
         # print("obs_vector shape\n", obs_vector.shape)

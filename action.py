@@ -82,7 +82,7 @@ class Action():
 
 
     def __str__(self):
-        return str(list(self.vector))
+        return "Action({0})".format(str(list(self.vector)))
 
     def __repr__(self):
-        return str(list(self.vector))
+        return "Action({0})".format(str(list(self.vector)))
