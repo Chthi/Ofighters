@@ -94,6 +94,21 @@ class Ship():
         self.act_vector = np.array([])
 
 
+    def reset(self):
+        # print("SHIP RESET")
+        # print(self.agent)
+        self.agent.reset()
+
+        self.time = 0
+        self.speed = 0
+        self.pointing = Point(self.body.x, self.body.y)
+        self.state = "flying"
+        self.can_shoot = 1
+
+        self.obs_vector = np.array([])
+        self.act_vector = np.array([])
+
+
     def is_playable(self):
         return self.state not in ["destroyed", "wreckage"]
 
@@ -219,6 +234,11 @@ class Ship():
     def move(self, action):
         """The ship can think. The ship can act. The ship is a smart boi."""
         self.time += 1
+
+        # If ship is destroyed ship can only contemplate sadness and despair
+        if not self.is_playable():
+            return None
+
         self.actualise = False
 
         if self.leroy_time == 1:

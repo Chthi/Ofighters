@@ -62,7 +62,9 @@ class Laser():
         explode = False
         for ship in self.battleground.ships:
             # colliding a ship
-            if self.body.collide(ship.body):
+            # we pass through destroyed ships
+            if ship.is_playable() and self.body.collide(ship.body):
+                # Destroying other ships sparks joy in ship
                 self.owner.agent.reward += 1
                 self.owner.battleground.last_x_time_rewards.append((1, self.battleground.time))
                 ship.hit(self)

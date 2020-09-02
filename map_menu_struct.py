@@ -40,6 +40,7 @@ class MapMenuStruct():
 
         # actualizing variables
         self.temps = 0
+        self.episode = 1
         self.fps = 1
         self.sleep_time = 1
         
@@ -70,6 +71,10 @@ class MapMenuStruct():
         self.ihm["fps"] = tk.Label(self.master, text="FPS "+str(self.fps), font="Arial 8", anchor='ne')
         # self.ihm["fps"].pack()
         self.ihm["fps"].grid(row=0, column=0, sticky=SW)
+
+        self.ihm["episode"] = tk.Label(self.master, text="Episode : "+str(self.episode), font="Arial 8", anchor='ne')
+        # self.ihm["episode"].pack()
+        self.ihm["episode"].grid(row=0, column=1, sticky=S)
 
         self.ihm["temps"] = tk.Label(self.master, text="Temps : "+str(self.temps), font="Arial 8", anchor='ne')
         # self.ihm["temps"].pack()
@@ -106,6 +111,21 @@ class MapMenuStruct():
         self.ihm["vitesse"].set(5)
         # self.ihm["vitesse"].pack()
         self.ihm["vitesse"].grid(row=next(self.latRightRowCount), column=0)
+
+
+    def place_exploration_rate(self):
+        self.ihm["label_exploration_rate"] = tk.Label(self.latRight,
+            text="Exploration", font="Ubuntu 12")
+        self.ihm["label_exploration_rate"].grid(row=next(self.latRightRowCount), column=0, pady=(35,5))
+
+        self.ihm["exploration"] = tk.Scale(
+            self.latRight, orient="horizontal",
+            from_=0, to=1, resolution=0.01,
+            tickinterval=1, length=100
+            )
+        self.ihm["exploration"].set(1)
+        # self.ihm["exploration"].pack()
+        self.ihm["exploration"].grid(row=next(self.latRightRowCount), column=0)
 
 
     def place_transfer_player(self):
@@ -187,6 +207,8 @@ class MapMenuStruct():
         # self.ihm["switch_session"].pack()
         self.ihm["switch_session"].grid(row=next(self.latRightRowCount), column=0)
 
+        self.place_exploration_rate()
+
 
     def ask_session_name(self):
         Alert("New session", "Create", callback=lambda x: print(x))
@@ -239,7 +261,9 @@ class MapMenuStruct():
         while not self.quitter:
             self.temps += 1
             self.ihm["temps"]["text"] = "Temps : "+str(self.temps)
-            
+
+            self.ihm["episode"]["text"] = "Episode : "+str(self.episode)
+
             if not self.training_mode:
                 self.sleep_time = 1 / self.ihm["vitesse"].get()
 

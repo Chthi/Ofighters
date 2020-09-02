@@ -70,8 +70,7 @@ class Agent():
         # dodge bot
 
     def reset(self):
-        if self.bot:
-            self.bot.reset()
+        # print("AGENT RESET")
         self.steps = 0
         self.scores.append(self.score)
         self.score = 0

@@ -77,7 +77,6 @@ RECORD_FOLDER = "ofighter_records"
 # TODO scripted evolving ships ia
 # TODO add a button to see what the neural network see
 # TODO increase the max processor usage (multitheading ?)
-# TODO separate IA trainer from Tkinter graphics manager
 # TODO add pad click 1 with mouse click one
 # TODO add a restart button
 
@@ -243,6 +242,18 @@ class Battleground():
             self.absolute_state = Observation(battleground=self)
 
 
+    def restart(self):
+        self.time = 0
+        self.lasers = []
+        self.actions = []
+
+        for ship in self.ships:
+            # print("RESET")
+            ship.reset()
+
+        self.absolute_state = Observation(battleground=self)
+
+
     def set_ia(self, network):
         for ship in self.ships:
             ship.network = network
@@ -351,11 +362,14 @@ class Ofighters(MapMenuStruct):
         for network in networks:
             network.clear_history()
         # regenerate a battleground
-        self.battleground = Battleground(ship_number=SHIPS_NUMBER, hauteur=self.dim.x, largeur=self.dim.y)
+        self.battleground.restart()
+        # self.battleground = Battleground(ship_number=SHIPS_NUMBER, hauteur=self.dim.x, largeur=self.dim.y)
         # we put back the player ship on the field if required
-        if self.ihm["string_transfer_player"].get() == "yes" and self.ihm["string_training_mode"].get() == "no":
-            self.transfer_player_ship()
+        # not used anymore as the ships objects are not deleted and the player stays in the ship until destroyed
+        # if self.ihm["string_transfer_player"].get() == "yes" and self.ihm["string_training_mode"].get() == "no":
+        #     self.transfer_player_ship()
         self.temps = 0
+        self.episode += 1
 
 
     def clear_battleground(self):
@@ -364,13 +378,13 @@ class Ofighters(MapMenuStruct):
         while self.images.lasers != []:
             self.ihm["carte"].delete(self.images.lasers[0])
             del self.images.lasers[0]
-        self.battleground.lasers = []
+        # self.battleground.lasers = []
         
         # remove image, reference to the ship and the corresponding object from the battleground
         while self.images.ships != []:
             self.ihm["carte"].delete(self.images.ships[0])
             del self.images.ships[0]
-        self.battleground.ships = []
+        # self.battleground.ships = []
         
         # the work is done
         for key, value in self.todelete.items():
@@ -386,6 +400,7 @@ class Ofighters(MapMenuStruct):
         self.ihm["save_ia"].configure(command=self.save_ia)
         self.ihm["check_transfer_player"].configure(command=self.transfer_player)
         self.ihm["switch_session"].configure(command=self.create_switch_session)
+        self.ihm["exploration"].configure(command=self.actualise_exploration)
     
 
     def create_switch_session(self):
@@ -419,6 +434,7 @@ class Ofighters(MapMenuStruct):
                 if len(self.images.ships) > i:
                     self.ihm["carte"].itemconfig(self.images.ships[i], fill=self.battleground.ships[i].color)
                 assigned = True
+            i += 1
         if not assigned:
             print("Impossible to assign a ship to player. None of them is playable.")
 
@@ -561,6 +577,12 @@ class Ofighters(MapMenuStruct):
             self.master.after(100, self.read_loading)
 
 
+    def actualise_exploration(self, value):
+        # All bots share the same trainer so we only apply on one
+        if hasattr(self.battleground.ships[0].agent, "trainer") and hasattr(self.battleground.ships[0].agent.trainer, "epsilon"):
+            self.battleground.ships[0].agent.trainer.epsilon = float(value)
+
+
     # TODO not adapted to launch multiple instances of Ofighters
     # musn't use decorators here
     @fps(fps_manager)
@@ -574,16 +596,32 @@ class Ofighters(MapMenuStruct):
             if self.recording:
                 self.record.saveFrame(self.battleground.actions)
 
-            if ship.state == "destroyed":
+            if ship.state == "wreckage":
+                continue
+            elif ship.state == "destroyed":
                 # explosion animation
                 # self.todelete.append(lambda : self.ihm["carte"].delete(self.images.ships[i]) )
                 # self.todelete["images"].append(self.images.ships[i])
                 # self.todelete["objects"].append(self.battleground.ships[i])
                 # self.todelete["ships"].append(self.images.ships[i])
+
                 self.todelete["ships"].append((self.images.ships[i], self.battleground.ships[i]))
+                # self.ihm["carte"][i] = None
+                self.images.ships[i] = None
+                ship.state = "wreckage"
                 if ship.player:
                     self.ihm["check_transfer_player"].deselect()
-            elif ship.time == 0:
+                    # Leave the ship !
+                    ship.unassign_player()
+
+            elif self.temps > 1 and ship.time == 0:
+                # we create images for new ships
+                self.images.ships[i] = self.ihm["carte"].create_oval(
+                        ship.body.x - ship.body.radius, ship.body.y - ship.body.radius,
+                        ship.body.x + ship.body.radius, ship.body.y + ship.body.radius,
+                        fill=ship.color, outline="Black", width="1"
+                    )
+            elif self.temps == 1 and ship.time == 0:
                 # we create images for new ships
                 self.images.ships.append(
                     self.ihm["carte"].create_oval(
@@ -593,9 +631,10 @@ class Ofighters(MapMenuStruct):
                     )
                 )
             else:
+                # print("state", ship.state)
                 # and move already existing image of existing ships
                 self.ihm["carte"].coords(
-                    self.images.ships[i], 
+                    self.images.ships[i],
                     ship.body.x - ship.body.radius, ship.body.y - ship.body.radius, 
                     ship.body.x + ship.body.radius, ship.body.y + ship.body.radius
                 )
@@ -621,7 +660,7 @@ class Ofighters(MapMenuStruct):
             else:
                 # and move already existing image of existing lasers
                 self.ihm["carte"].coords(
-                    self.images.lasers[i], 
+                    self.images.lasers[i],
                     laser.body.x - laser.body.radius, laser.body.y - laser.body.radius, 
                     laser.body.x + laser.body.radius, laser.body.y + laser.body.radius
                 )
@@ -636,6 +675,14 @@ class Ofighters(MapMenuStruct):
 
         if not self.training_mode:
             self.sleep_time = 1 / self.ihm["vitesse"].get()
+
+
+        if hasattr(self.battleground.ships[0].agent, "trainer") and hasattr(self.battleground.ships[0].agent.trainer, "epsilon"):
+            self.ihm["exploration"].set(self.battleground.ships[0].agent.trainer.epsilon)
+            print("DECAY TO ", self.battleground.ships[0].agent.trainer.epsilon)
+
+
+
 
         sleep(self.sleep_time)
 
@@ -653,8 +700,8 @@ class Ofighters(MapMenuStruct):
         # remove image, reference to the ship and the corresponding object from the battleground
         for image, obj in self.todelete["ships"]:
             self.ihm["carte"].delete(image)
-            self.images.ships.remove(image)
-            self.battleground.ships.remove(obj)
+            # self.images.ships.remove(image)
+            # self.battleground.ships.remove(obj)
         
         # the work is done
         for key, value in self.todelete.items():
@@ -679,6 +726,8 @@ class Ofighters(MapMenuStruct):
 
             self.temps += 1
             self.ihm["temps"]["text"] = "Temps : "+str(self.temps)
+
+            self.ihm["episode"]["text"] = "Episode : "+str(self.episode)
 
             self.frame()
 
