@@ -91,9 +91,10 @@ class MapMenuStruct():
         # self.latRight.pack()
         self.latRight.grid(row=0, rowspan=2, column=3, sticky=NSEW)
         self.latRightRowCount = counter()
-        self.place_speed()
+        # self.place_speed()
+        self.place_log_speed()
         self.place_transfer_player()
-        self.place_supervised()
+        # self.place_supervised()
         self.place_unsupervised()
         self.place_quit()
 
@@ -109,6 +110,29 @@ class MapMenuStruct():
             tickinterval=100, length=100
             )
         self.ihm["vitesse"].set(5)
+        # self.ihm["vitesse"].pack()
+        self.ihm["vitesse"].grid(row=next(self.latRightRowCount), column=0)
+
+
+    def place_log_speed(self):
+        self.ihm["label_speed"] = tk.Label(self.latRight,
+            text="Speed", font="Ubuntu 14")
+        self.ihm["label_speed"].grid(row=next(self.latRightRowCount), column=0, pady=(35,5))
+
+        self.ihm["label_log_speed"] = tk.Label(self.latRight, text="")
+        self.ihm["label_log_speed"].grid(row=next(self.latRightRowCount), column=0, pady=(35,5))
+
+        def actualise_label(value):
+            self.ihm["label_log_speed"].config(text=f"{10**float(value):.1f}")
+
+        self.ihm["vitesse"] = tk.Scale(
+            self.latRight, orient="horizontal",
+            from_=-0.3, to=3, resolution=0.1,
+            tickinterval=0, length=100, showvalue=0,
+            command=actualise_label
+            )
+
+        self.ihm["vitesse"].set(0.7)
         # self.ihm["vitesse"].pack()
         self.ihm["vitesse"].grid(row=next(self.latRightRowCount), column=0)
 
@@ -203,21 +227,22 @@ class MapMenuStruct():
         self.ihm["check_continuous_training"].grid(row=next(self.latRightRowCount), column=0)
         self.ihm["check_continuous_training"].deselect()
 
-        self.ihm["switch_session"] = tk.Button(self.latRight, text="New session", command=self.ask_session_name)
-        # self.ihm["switch_session"].pack()
-        self.ihm["switch_session"].grid(row=next(self.latRightRowCount), column=0)
-
+        # self.place_switch_session()
         self.place_exploration_rate()
 
 
-    def ask_session_name(self):
-        Alert("New session", "Create", callback=lambda x: print(x))
+    def place_switch_session(self):
+        def ask_session_name():
+            Alert("New session", "Create", callback=lambda x: print(x))
+        self.ihm["switch_session"] = tk.Button(self.latRight, text="New session", command=ask_session_name)
+        # self.ihm["switch_session"].pack()
+        self.ihm["switch_session"].grid(row=next(self.latRightRowCount), column=0)
 
 
     def place_quit(self):
         self.ihm["quitter"] = tk.Button(self.latRight, text="Stopper la simulation", command=self.quit)
         # self.ihm["quitter"].pack()
-        self.ihm["quitter"].grid(row=next(self.latRightRowCount), column=0, pady=(410,0))
+        self.ihm["quitter"].grid(row=next(self.latRightRowCount), column=0, pady=(20,10)) # 410
 
 
     def expand_map(self):
@@ -229,7 +254,8 @@ class MapMenuStruct():
 
     def hide_map(self):
         self.training_mode = False
-        self.sleep_time = 1 / self.ihm["vitesse"].get()
+        # self.sleep_time = 1 / self.ihm["vitesse"].get()
+        self.sleep_time = 1 / (10 ** self.ihm["vitesse"].get())
         # put back display interface
         # self.ihm["carte"].pack()
         self.ihm["carte"].grid(row=1, columnspan=3, column=0)
@@ -265,7 +291,7 @@ class MapMenuStruct():
             self.ihm["episode"]["text"] = "Episode : "+str(self.episode)
 
             if not self.training_mode:
-                self.sleep_time = 1 / self.ihm["vitesse"].get()
+                self.sleep_time = 1 / (10 ** self.ihm["vitesse"].get())
 
             sleep(self.sleep_time)
 

@@ -394,13 +394,15 @@ class Ofighters(MapMenuStruct):
 
 
     def link_functionnalities(self):
-        self.ihm["check_recording"].configure(command=self.swap_recording)
-        self.master.bind("r", lambda e: self.ihm["check_recording"].invoke())
-        self.ihm["train"].configure(command=self.analyse_records)
-        self.ihm["save_ia"].configure(command=self.save_ia)
-        self.ihm["check_transfer_player"].configure(command=self.transfer_player)
-        self.ihm["switch_session"].configure(command=self.create_switch_session)
-        self.ihm["exploration"].configure(command=self.actualise_exploration)
+        # self.ihm["check_recording"].configure(command=self.swap_recording)
+        # self.master.bind("r", lambda e: self.ihm["check_recording"].invoke())
+        # self.ihm["train"].configure(command=self.analyse_records)
+        # self.ihm["save_ia"].configure(command=self.save_ia)
+        if "check_transfer_player" in self.ihm:
+            self.ihm["check_transfer_player"].configure(command=self.transfer_player)
+        # self.ihm["switch_session"].configure(command=self.create_switch_session)
+        if "exploration" in self.ihm:
+            self.ihm["exploration"].configure(command=self.actualise_exploration)
     
 
     def create_switch_session(self):
@@ -609,7 +611,7 @@ class Ofighters(MapMenuStruct):
                 # self.ihm["carte"][i] = None
                 self.images.ships[i] = None
                 ship.state = "wreckage"
-                if ship.player:
+                if ship.player and "check_transfer_player" in self.ihm :
                     self.ihm["check_transfer_player"].deselect()
                     # Leave the ship !
                     ship.unassign_player()
@@ -674,12 +676,15 @@ class Ofighters(MapMenuStruct):
         self.clear_wreckage()
 
         if not self.training_mode:
-            self.sleep_time = 1 / self.ihm["vitesse"].get()
+            # sleep time goes from 2s to 1ms (0.5 fps to 1000fps)
+            self.sleep_time = 1 / (10 ** self.ihm["vitesse"].get())
 
 
-        if hasattr(self.battleground.ships[0].agent, "trainer") and hasattr(self.battleground.ships[0].agent.trainer, "epsilon"):
+        if hasattr(self.battleground.ships[0].agent, "trainer") and \
+                hasattr(self.battleground.ships[0].agent.trainer, "epsilon") and \
+                "exploration" in self.ihm:
             self.ihm["exploration"].set(self.battleground.ships[0].agent.trainer.epsilon)
-            print("DECAY TO ", self.battleground.ships[0].agent.trainer.epsilon)
+            # print("DECAY TO ", self.battleground.ships[0].agent.trainer.epsilon)
 
 
 

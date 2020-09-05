@@ -2,6 +2,7 @@
 import numpy as np
 
 from keras.models import Sequential, load_model
+from keras.backend import set_session
 from keras.layers.core import Dense, Dropout, Activation
 from keras.optimizers import RMSprop, Adam, sgd
 from keras.layers.advanced_activations import LeakyReLU
@@ -47,6 +48,8 @@ class Trainer:
         
         self.name = name
 
+        self.session = tf.Session()
+        set_session(self.session)
         self.graph = tf.get_default_graph()
 
         architecture = "conv2d"
@@ -71,22 +74,22 @@ class Trainer:
 
             # Convolution 400x400 -> 199x199
             conv_layer1 = Conv2D(8, (3,3), activation='relu')(image_input)
-            norm1 = Dropout(0.2)(conv_layer1)
+            norm1 = BatchNormalization()(conv_layer1)
             relu1 = Activation("relu")(norm1)
             pool_layer1 = MaxPooling2D(pool_size=(2, 2))(relu1)
             # Convolution 199x199 -> 98x98
             conv_layer2 = Conv2D(8, (3,3), activation='relu')(pool_layer1)
-            norm2 = Dropout(0.2)(conv_layer2)
+            norm2 = BatchNormalization()(conv_layer2)
             relu2 = Activation("relu")(norm2)
             pool_layer2 = MaxPooling2D(pool_size=(2, 2))(relu2)
             # Convolution 98x98 -> 48x48
             conv_layer3 = Conv2D(8, (3,3), activation='relu')(pool_layer2)
-            norm3 = Dropout(0.2)(conv_layer3)
+            norm3 = BatchNormalization()(conv_layer3)
             relu3 = Activation("relu")(norm3)
             pool_layer3 = MaxPooling2D(pool_size=(2, 2))(relu3)
             # Convolution 48x48 -> 23x23
             conv_layer4 = Conv2D(4, (3,3), activation='relu')(pool_layer3)
-            norm4 = Dropout(0.2)(conv_layer4)
+            norm4 = BatchNormalization()(conv_layer4)
             relu4 = Activation("relu")(norm4)
             pool_layer4 = MaxPooling2D(pool_size=(2, 2))(relu4)
 
@@ -115,11 +118,12 @@ class Trainer:
             # The agent acts randomly
             return random.randrange(self.action_size)
 
-        with self.graph.as_default():
-        # Predict the reward value based on the given state
-            # act_values = self.model.predict(obs.vector.T)
-            img_input = np.expand_dims(np.stack((obs.ship_map, obs.laser_map), axis=2), axis=0)
-            act_values = self.model.predict([img_input, obs.vector[:8].T], workers=8, use_multiprocessing=True)[0]
+        with self.session.as_default():
+            with self.graph.as_default():
+            # Predict the reward value based on the given state
+                # act_values = self.model.predict(obs.vector.T)
+                img_input = np.expand_dims(np.stack((obs.ship_map, obs.laser_map), axis=2), axis=0)
+                act_values = self.model.predict([img_input, obs.vector[:8].T], workers=8, use_multiprocessing=True)[0]
 
         # Pick the action based on the predicted reward
         iaction =  np.argmax(act_values[0])
@@ -147,33 +151,34 @@ class Trainer:
         inputs2 = np.zeros((batch_size, 8))
         outputs = np.zeros((batch_size, self.action_size))
 
-        with self.graph.as_default():
-            for i, (obs, iaction, reward, next_obs) in enumerate(minibatch):
-                # target = self.model.predict(obs.vector.T)[0]
+        with self.session.as_default():
+            with self.graph.as_default():
+                for i, (obs, iaction, reward, next_obs) in enumerate(minibatch):
+                    # target = self.model.predict(obs.vector.T)[0]
 
-                img_input = np.expand_dims(np.stack((obs.ship_map, obs.laser_map), axis=2), axis=0)
-                # img_input = np.stack((obs.ship_map, obs.laser_map), axis=2)
-                # img_input = np.array([obs.ship_map, obs.laser_map])
+                    img_input = np.expand_dims(np.stack((obs.ship_map, obs.laser_map), axis=2), axis=0)
+                    # img_input = np.stack((obs.ship_map, obs.laser_map), axis=2)
+                    # img_input = np.array([obs.ship_map, obs.laser_map])
 
-                # img_input = np.array([obs.ship_map, obs.laser_map])
-                # print("obs.vector[:8].T.shape", obs.vector[:8].T.shape)
-                # print("img_input", img_input)
-                # print("img_input.shape", img_input.shape)
-                # print("len(img_input)", len(img_input))
-                # print("type(img_input[0])", type(img_input[0]))
+                    # img_input = np.array([obs.ship_map, obs.laser_map])
+                    # print("obs.vector[:8].T.shape", obs.vector[:8].T.shape)
+                    # print("img_input", img_input)
+                    # print("img_input.shape", img_input.shape)
+                    # print("len(img_input)", len(img_input))
+                    # print("type(img_input[0])", type(img_input[0]))
 
-                target = self.model.predict([img_input, obs.vector[:8].T], workers=8, use_multiprocessing=True)[0] # workers=8, use_multiprocessing=True
-                # print("target", target)
-                # prediction = self.model.predict(next_obs.vector.T)
-                img_input = np.expand_dims(np.stack((next_obs.ship_map, next_obs.laser_map), axis=2), axis=0)
-                prediction = self.model.predict([img_input, next_obs.vector[:8].T], workers=8, use_multiprocessing=True)[0]
-                # print("prediction", prediction)
-                target[iaction] = reward + self.gamma * np.max(prediction)
+                    target = self.model.predict([img_input, obs.vector[:8].T], workers=8, use_multiprocessing=True)[0] # workers=8, use_multiprocessing=True
+                    # print("target", target)
+                    # prediction = self.model.predict(next_obs.vector.T)
+                    img_input = np.expand_dims(np.stack((next_obs.ship_map, next_obs.laser_map), axis=2), axis=0)
+                    prediction = self.model.predict([img_input, next_obs.vector[:8].T], workers=8, use_multiprocessing=True)[0]
+                    # print("prediction", prediction)
+                    target[iaction] = reward + self.gamma * np.max(prediction)
 
-                inputs1[i] = img_input
-                inputs2[i] = next_obs.vector[:8].T
-                outputs[i] = target
-            fited = self.model.fit(x=[inputs1, inputs2], y=outputs, epochs=1, batch_size=batch_size, workers=8, use_multiprocessing=True) # verbose=0,
+                    inputs1[i] = img_input
+                    inputs2[i] = next_obs.vector[:8].T
+                    outputs[i] = target
+                fited = self.model.fit(x=[inputs1, inputs2], y=outputs, epochs=1, batch_size=batch_size, workers=8, use_multiprocessing=True) # verbose=0,
         return fited
 
     def save(self, id=None, overwrite=False):
@@ -184,8 +189,9 @@ class Trainer:
             name += '-' + now()
         if id:
             name += '-' + id
-        with self.graph.as_default():
-            self.model.save(NETWORKS_FOLDER + "/" + name, overwrite=overwrite)
+        with self.session.as_default():
+            with self.graph.as_default():
+                self.model.save(NETWORKS_FOLDER + "/" + name, overwrite=overwrite)
 
 
 from math import log
@@ -193,7 +199,7 @@ DECAY = 0.9995
 print("Time before decaying to 1% :", log(0.01) / log(DECAY) )
 # TRAINER = Trainer(learning_rate=0.001, epsilon_decay=0.999995, batch_size=8)
 TRAINER = Trainer(learning_rate=0.001, epsilon_decay=DECAY, batch_size=8,
-                  name="conv2d_dropout"
+                  name="conv2d_batchnorm"
                   )
 
 
