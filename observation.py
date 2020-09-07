@@ -100,6 +100,8 @@ class Observation():
         self.pointing = ship.pointing
         self.pos = Point(ship.body.x, ship.body.y)
         self.shipA = True
+        # TODO add done to vector ?
+        self.done = not ship.is_playable()
         self.toVector()
 
     # TODO add information isPlayer

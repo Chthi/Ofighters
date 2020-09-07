@@ -82,3 +82,8 @@ class Laser():
 
     def __repr__(self):
         return str(self.id)
+
+
+
+if __name__ == "__main__":
+    Laser()

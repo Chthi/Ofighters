@@ -1,12 +1,6 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
-import sys
-import os
-import math
-import functools
-
-from random import randint, random, choice
 from collections import namedtuple, deque
 from copy import copy, deepcopy
 
@@ -17,12 +11,15 @@ import datetime
 import pickle
 import json
 import glob
+import threading
+from itertools import count
 
 from record import OfighterRecord
 from thread_manager import spawnthread
 from couple import Couple
 from form import Circle
-from ship import Ship
+from player import Player
+from battleground import Battleground
 from laser import Laser
 from action import Action
 from observation import Observation, DEFAULT_WIDTH, DEFAULT_HEIGHT
@@ -43,11 +40,6 @@ else :
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 
-# TODO display a graph of rewards per minutes
-# TODO button to remove leroy jenkins
-# TODO stats actions, score, plot
-
-# TODO keybind r to record
 
 SHIPS_NUMBER = 7
 
@@ -56,34 +48,12 @@ MAP_PRECISION = 4
 MAX_TIME = 200
 ANTICIPATION = 100
 
-
 RECORD_FOLDER = "ofighter_records"
 
-
-# TODO kill when shooting inside opponent ?
-# TODO storage of observations huge. use a generative aproch for records ? ie. only record actions and replay the match
-# TODO homogenise fps (no wait if computation time high etc)
-# TODO store all the actions an then play them all
-# TODO load network that match required layers/token/unique string
-# TODO there is a slight possibility to kill yourself (maybe when shooting and moving during the same frame)
-
-# TODO sleep less each frame is compute time is high (but set minimum sleep)
-# TODO add laser sight to player ship
-# TODO statistic object containing all kills, etc..
-# TODO different type of ships
-# TODO different type of thrusters
-# TODO evolving ships design
-# TODO evolving ships ia
-# TODO scripted evolving ships ia
-# TODO add a button to see what the neural network see
-# TODO increase the max processor usage (multitheading ?)
-# TODO add pad click 1 with mouse click one
-# TODO add a restart button
+DISPLAY_LOSSES = True
 
 def now():
     return datetime.datetime.now().strftime("%y-%m-%d-%H-%M-%S")
-
-
 
 
 
@@ -98,220 +68,10 @@ def now():
 
 
 
-class Player():
-    max_id = 1
-    keysets = {
-        "mouse" : {
-            "<Button-1>" : "shoot", 
-            "a" : "thrust", 
-            "<Motion>" : "pointing",
-        }
-    }
-
-    def __init__(self, keyset, master, carte):
-        # TODO automatized named tuple
-        self.id = Player.max_id
-        Player.max_id += 1
-        self.keyset = Player.keysets[keyset]
-        # for event, tAction in self.keyset.items():
-            # carte.bind(event, tAction[1])
-        carte.bind("<Button-1>", lambda e : self.press_shoot(e))
-        carte.bind("<ButtonRelease-1>", lambda e : self.unpress_shoot(e))
-        master.bind("a", lambda e : self.request_thrust(e))
-        master.bind("<Motion>", lambda e : self.request_turn(e))
-        self.shoot = False
-        self.clear_keys()
-
-
-    def press_shoot(self, event):
-        self.actions_set.add("shoot")
-        # print(self.actions_set)
-        self.shoot = True
-        # print("request shoot")
-
-    def unpress_shoot(self, event):
-        # print(self.actions_set)
-        if "shoot" in self.actions_set:
-            self.actions_set.remove("shoot")
-        self.shoot = False
-        # print("request cease fire")
-
-    def request_thrust(self, event):
-        self.actions_set.add("thrust")
-        self.thrust = True
-        # print("request thrust")
-
-    def request_turn(self, event):
-        self.actions_set.add("pointing")
-        self.turn = True
-        self.cursor = Couple(event.x, event.y)
-        # print("request turn", self.cursor)
-
-    def clear_keys(self):
-        self.actions_set = set()
-        if self.shoot:
-            self.actions_set.add("shoot")
-        self.thrust = False
-        self.turn = False
-        self.cursor = None
-
-
-
-class Battleground():
-    # TODO parameter to pass nb of IA of each type
-    def __init__(self, state=None, ship_number=2, largeur=DEFAULT_WIDTH, hauteur=DEFAULT_HEIGHT, networks=[]):
-        """Create a battleground with ships
-        networks must be a list of size ship_number containing neural networks
-        if not set the networks will be generated randomly"""
-        self.background = '#000000'
-        self.ships_number = ship_number
-        self.time = 0
-        self.dim = Couple(largeur, hauteur)
-        self.ships = []
-        self.lasers = []
-        self.networks = networks
-        # action vector of each ship at each given moment/frame
-        self.actions = []
-
-        # list of all the rewards get and there obtention time
-        # ex : (1, 120)
-        self.last_x_time_rewards = []
-        # expiration time of rewards in this list
-        self.reward_list_len = 100
-
-        # for the moment all the ships share the same network.
-        # it's faster to train
-        # if self.networks == []:
-            # TODO import model created
-            # self.networks = [network]
-
-        # if not networks:
-        #     networks = []
-        #     for i in range(self.ships_number):
-        #         network = Renforcement_learning_neural_network(
-        #                     [Observation.size, 9, Action.size], 
-        #                     history_size=ANTICIPATION)
-        #         # we force a bit the shoot and thrust actions
-        #         # because spinning ships aren't fun
-        #         network.biases_layers[-1][1][0] = 3 * abs(network.biases_layers[-1][1][0])
-        #         network.biases_layers[-1][2][0] = 3 * abs(network.biases_layers[-1][2][0])
-        #         for i in range(len(network.biases_layers[-1])):
-        #             network.biases_layers[-1][i][0] = network.biases_layers[-1][i][0] / 4
-        #         networks.append(network)
-
-        # copy by reference so at the end
-        # when the ships will be deleted the networks will stay
-        # self.networks = networks
-
-        """
-        if len(self.networks) == 1:
-            for x in range(self.ships_number):
-                self.ships.append(Ship(randint(0, largeur), randint(0, hauteur), self, self.networks[0]))
-        else:
-            for x in range(self.ships_number):
-                self.ships.append(Ship(randint(0, largeur), randint(0, hauteur), self, self.networks[x]))
-        """
-
-        for x in range(self.ships_number):
-            # network random
-            # self.ships.append(Ship(randint(0, largeur), randint(0, hauteur), self, behavior="network"))
-            self.ships.append(Ship(randint(0, largeur), randint(0, hauteur), self, behavior="q_learning"))
-            # self.ships.append(Ship(randint(0, largeur), randint(0, hauteur), self, behavior="random"))
-
-        # print("there")
-        # self.time_list = [self.time]
-        # # list of average rewards
-        # self.acc_rewards = [0]
-        # # Creation of the graph of avg reward
-        # fig, ax = plt.subplots()
-        # # Size of the graph
-        # plt.axis([0, 1, 0, 50])
-        # # real time modification handeling
-        # plt.ion()
-        # plt.title("Summed rewards of last frames")
-        # plt.xlabel("time")
-        # plt.ylabel("avg rewards last {} frames".format(self.reward_list_len))
-        # plt.xlim(32, 212)
-        # plt.grid(True)
-        # self.points, = ax.plot(self.time_list, self.acc_rewards, marker='o', linestyle='-')
-
-        if state:
-            self.absolute_state = state
-            Observation.loadBattleground(self, state)
-        else:
-            self.absolute_state = Observation(battleground=self)
-
-
-    def restart(self):
-        self.time = 0
-        self.lasers = []
-        self.actions = []
-
-        for ship in self.ships:
-            # print("RESET")
-            ship.reset()
-
-        self.absolute_state = Observation(battleground=self)
-
-
-    def set_ia(self, network):
-        for ship in self.ships:
-            ship.network = network
-
-
-    def outside(self, x, y):
-        return (x < 0) or (y < 0) or (x >= self.dim.x) or (y >= self.dim.y)
-
-
-    # def plot_last_time_rewards(self):
-    #     # temps.append(self.time)
-    #     self.acc_rewards.append(sum(map(lambda x:x[0], self.last_x_time_rewards)))
-    #     self.acc_rewards.append(self.time)
-
-    #     # On recentre le graphique
-    #     plt.axis([0, self.time_list[-1] - self.time_list[0] + 1, 0, max(self.acc_rewards)+1])
-        
-    #     # on place le nouveau point
-    #     # plt.scatter(self.time, data)
-    #     self.points.set_data(self.time_list, self.acc_rewards)
-
-    #     # if the oldest recorded reward passed his expiration date we remove it
-    #     if self.last_x_time_rewards and self.time - self.last_x_time_rewards[0][0] > self.reward_list_len :
-    #         self.last_x_time_rewards.pop()
-
-
-    def request_actions(self):
-        return [ship.get_action(self.absolute_state) for ship in self.ships]
-
-
-    def generate_frame(self, actions):
-        # self.plot_last_time_rewards()
-        self.time += 1
-        # TODO compute simultaneously so first ships don't have advantage on last ones
-        for laser in self.lasers:
-            laser.move()
-        for i, ship in enumerate(self.ships):
-            ship.move(actions[i])
-
-
-    def frame(self):
-        self.actions = self.request_actions()
-        self.generate_frame(self.actions)
-        self.absolute_state = Observation(battleground=self)
-
-
-    def run(self):
-        # used without interface so ctrl+C is quit for the moment
-        # TODO improve quitting, but not used anyway
-        while 1:
-            self.frame()
-
-
-
 class Ofighters(MapMenuStruct):
     fps_manager = fps_manager()
 
-    def __init__(self, size=20, largeur=DEFAULT_WIDTH, hauteur=DEFAULT_HEIGHT):
+    def __init__(self, largeur=DEFAULT_WIDTH, hauteur=DEFAULT_HEIGHT):
         # we call the basic graphic interface for the game
         super().__init__(largeur, hauteur)
 
@@ -323,11 +83,21 @@ class Ofighters(MapMenuStruct):
         # contains all the objects we will need to delete
         self.todelete = {}
 
+        plt.style.use('fivethirtyeight')
+
         self.battleground = Battleground(ship_number=SHIPS_NUMBER, largeur=self.dim.x, hauteur=self.dim.y)
         self.switch_session("default")
 
         Images = namedtuple("Images", ['ships', 'lasers', ])
-        self.images = Images([], [], )
+        ships_images_list = len(self.battleground.ships) * [None]
+        self.images = Images(ships_images_list, [], )
+
+        # images contains tkinter graphical objects
+        # lasers contains (index, object) indexes of ships images
+        # and corresponding object in the battleground
+        # lasers contains indexes of ships images
+        self.todelete = {"images" : [], "lasers" : [], "ships" : []}
+
         self.threads = {}
 
         # main window
@@ -343,15 +113,40 @@ class Ofighters(MapMenuStruct):
         self.player_ship = True
         self.transfer_player_ship()
 
+        print("Main thread : ", threading.current_thread().ident)
         # other windows
-        self.threads["run"] = spawnthread(self.run)
-        
+        self.run()
+        # self.master.after(0, self.run)
+        # self.threads["run"] = spawnthread(self.run)
+
+        # losses graphic window
+        if DISPLAY_LOSSES:
+            # plt.ion()
+            self.fig = plt.figure()
+            self.ax_losses = self.fig.add_subplot(1,1,1)
+            # self.ax_losses = plt.subplot(111)
+            self.ax_losses.set_xlabel('Replays')
+            self.ax_losses.set_ylabel('Loss')
+            self.len_losses = 1
+            # self.line_losses, = self.ax_losses.plot([0], [0])
+            plt.tight_layout()
+            self.master.after(1000, self.animate_loss)
+            # self.master.after(0, plt.show)
+            self.master.after(0, self.fig.show)
+            print("showed")
+
         # run the main thread/loop
+        print("mainloop")
         self.master.mainloop()
 
-
+    def add_plot(self):
+        x_vals = [0, 1, 2, 3, 4, 5]
+        y_vals = [0, 1, 3, 2, 3, 5]
+        plt.plot(x_vals, y_vals)
+        plt.show()
 
     def restart(self):
+        print("restart")
         if self.recording:
             self.save_records(os.path.join(RECORD_FOLDER, "ofighter_record_" + now()))
             # TODO check is nb ships diminue quand ils meurent
@@ -362,6 +157,7 @@ class Ofighters(MapMenuStruct):
         for network in networks:
             network.clear_history()
         # regenerate a battleground
+        print("battleground restart")
         self.battleground.restart()
         # self.battleground = Battleground(ship_number=SHIPS_NUMBER, hauteur=self.dim.x, largeur=self.dim.y)
         # we put back the player ship on the field if required
@@ -373,20 +169,21 @@ class Ofighters(MapMenuStruct):
 
 
     def clear_battleground(self):
-
+        print("clear_battleground")
         # remove image, reference to the laser and the corresponding object from the battleground
         while self.images.lasers != []:
             self.ihm["carte"].delete(self.images.lasers[0])
             del self.images.lasers[0]
-        # self.battleground.lasers = []
+        self.battleground.lasers = []
         
-        # remove image, reference to the ship and the corresponding object from the battleground
-        while self.images.ships != []:
-            self.ihm["carte"].delete(self.images.ships[0])
-            del self.images.ships[0]
-        # self.battleground.ships = []
+        # remove image and image reference of ships
+        # but not the corresponding object from the battleground
+        # they are kept as wreckage and repaired each game/restart/episode
+        for i, ship_image in enumerate(self.images.ships):
+            self.ihm["carte"].delete(ship_image)
+            self.images.ships[i] = None
         
-        # the work is done
+        # reset the list of things to delete
         for key, value in self.todelete.items():
             self.todelete[key] = []
 
@@ -394,10 +191,14 @@ class Ofighters(MapMenuStruct):
 
 
     def link_functionnalities(self):
-        # self.ihm["check_recording"].configure(command=self.swap_recording)
-        # self.master.bind("r", lambda e: self.ihm["check_recording"].invoke())
-        # self.ihm["train"].configure(command=self.analyse_records)
-        # self.ihm["save_ia"].configure(command=self.save_ia)
+        """Link all commands/functionalities/features to their graphical component."""
+        if "check_recording" in self.ihm:
+            self.ihm["check_recording"].configure(command=self.swap_recording)
+            self.master.bind("r", lambda e: self.ihm["check_recording"].invoke())
+        if "train" in self.ihm:
+            self.ihm["train"].configure(command=self.analyse_records)
+        if "save_ia" in self.ihm:
+            self.ihm["save_ia"].configure(command=self.save_ia)
         if "check_transfer_player" in self.ihm:
             self.ihm["check_transfer_player"].configure(command=self.transfer_player)
         # self.ihm["switch_session"].configure(command=self.create_switch_session)
@@ -451,8 +252,6 @@ class Ofighters(MapMenuStruct):
                     self.ihm["carte"].itemconfig(self.images.ships[i], fill=ship.color)
 
 
-    # TODO pause
-    # TODO click on ship to save IA (Save this IA)
     def save_ia(self):
         """There must be an IA to save in the battleground"""
         file = os.path.join(NETWORKS_FOLDER, self.session_name, "ofighter_network_" + now())
@@ -501,9 +300,6 @@ class Ofighters(MapMenuStruct):
             if self.ihm["string_training_mode"].get() == "no":
                 self.untransfer_player_ship()
 
-    # TODO max size on obs/act vectors un renforcement nn
-    # TODO multiplayer ? :)
-
     def save_records(self, name):
         self.record.save(name)
 
@@ -512,7 +308,6 @@ class Ofighters(MapMenuStruct):
 
 
     def swap_training_mode(self):
-        # TODO replace all the things at the right place (use grid ?)
         if self.ihm["string_training_mode"].get() == "yes":
             if self.ihm["string_transfer_player"].get() == "yes":
                 # the player do not need to play while the training mode is on
@@ -585,11 +380,30 @@ class Ofighters(MapMenuStruct):
             self.battleground.ships[0].agent.trainer.epsilon = float(value)
 
 
-    # TODO not adapted to launch multiple instances of Ofighters
-    # musn't use decorators here
-    @fps(fps_manager)
-    def frame(self):
+    def assign_ship_image(self, i, ship):
+        # we create images for new ships
+        self.images.ships[i] = self.ihm["carte"].create_oval(
+                ship.body.x - ship.body.radius, ship.body.y - ship.body.radius,
+                ship.body.x + ship.body.radius, ship.body.y + ship.body.radius,
+                fill=ship.color, outline="Black", width="1"
+            )
 
+    def move_ship_image(self, i, ship):
+        # print("state", ship.state)
+        # and move already existing image of existing ships
+        self.ihm["carte"].coords(
+            self.images.ships[i],
+            ship.body.x - ship.body.radius, ship.body.y - ship.body.radius,
+            ship.body.x + ship.body.radius, ship.body.y + ship.body.radius
+        )
+
+    def destroy_ship_image(self, i, ship):
+        # explosion animation
+        self.todelete["ships"].append((self.images.ships[i], self.battleground.ships[i]))
+        self.images.ships[i] = None
+
+
+    def actualise_ships(self):
         for i, ship in enumerate(self.battleground.ships):
 
             if ship.actualise:
@@ -599,63 +413,35 @@ class Ofighters(MapMenuStruct):
                 self.record.saveFrame(self.battleground.actions)
 
             if ship.state == "wreckage":
+                # image removed
                 continue
             elif ship.state == "destroyed":
-                # explosion animation
-                # self.todelete.append(lambda : self.ihm["carte"].delete(self.images.ships[i]) )
-                # self.todelete["images"].append(self.images.ships[i])
-                # self.todelete["objects"].append(self.battleground.ships[i])
-                # self.todelete["ships"].append(self.images.ships[i])
-
-                self.todelete["ships"].append((self.images.ships[i], self.battleground.ships[i]))
-                # self.ihm["carte"][i] = None
-                self.images.ships[i] = None
+                # remove image
+                self.destroy_ship_image(i, ship)
                 ship.state = "wreckage"
                 if ship.player and "check_transfer_player" in self.ihm :
                     self.ihm["check_transfer_player"].deselect()
                     # Leave the ship !
                     ship.unassign_player()
-
-            elif self.temps > 1 and ship.time == 0:
-                # we create images for new ships
-                self.images.ships[i] = self.ihm["carte"].create_oval(
-                        ship.body.x - ship.body.radius, ship.body.y - ship.body.radius,
-                        ship.body.x + ship.body.radius, ship.body.y + ship.body.radius,
-                        fill=ship.color, outline="Black", width="1"
-                    )
-            elif self.temps == 1 and ship.time == 0:
-                # we create images for new ships
-                self.images.ships.append(
-                    self.ihm["carte"].create_oval(
-                        ship.body.x - ship.body.radius, ship.body.y - ship.body.radius, 
-                        ship.body.x + ship.body.radius, ship.body.y + ship.body.radius, 
-                        fill=ship.color, outline="Black", width="1"
-                    )
-                )
+            elif self.temps >= 1 and ship.time == 0:
+                # create image
+                self.assign_ship_image(i, ship)
             else:
-                # print("state", ship.state)
-                # and move already existing image of existing ships
-                self.ihm["carte"].coords(
-                    self.images.ships[i],
-                    ship.body.x - ship.body.radius, ship.body.y - ship.body.radius, 
-                    ship.body.x + ship.body.radius, ship.body.y + ship.body.radius
-                )
+                # move image
+                self.move_ship_image(i, ship)
 
 
+    def actualise_lasers(self):
         for i, laser in enumerate(self.battleground.lasers):
             if laser.state == "destroyed":
                 # explosion animation
-                # self.todelete.append(lambda : self.ihm["carte"].delete(self.images.lasers[i]) )
-                # self.todelete["images"].append(self.images.lasers[i])
-                # self.todelete["objects"].append(self.battleground.lasers[i])
-                # self.todelete["lasers"].append(self.images.lasers[i])
                 self.todelete["lasers"].append((self.images.lasers[i], self.battleground.lasers[i]))
             elif laser.time == 0:
                 # we create images for new lasers
                 self.images.lasers.append(
                     self.ihm["carte"].create_oval(
-                        laser.body.x - laser.body.radius, laser.body.y - laser.body.radius, 
-                        laser.body.x + laser.body.radius, laser.body.y + laser.body.radius, 
+                        laser.body.x - laser.body.radius, laser.body.y - laser.body.radius,
+                        laser.body.x + laser.body.radius, laser.body.y + laser.body.radius,
                         fill=laser.color
                     )
                 )
@@ -663,22 +449,29 @@ class Ofighters(MapMenuStruct):
                 # and move already existing image of existing lasers
                 self.ihm["carte"].coords(
                     self.images.lasers[i],
-                    laser.body.x - laser.body.radius, laser.body.y - laser.body.radius, 
+                    laser.body.x - laser.body.radius, laser.body.y - laser.body.radius,
                     laser.body.x + laser.body.radius, laser.body.y + laser.body.radius
                 )
+
+
+    # TODO not adapted to launch multiple instances of Ofighters
+    # musn't use decorators here
+    # @fps(fps_manager)
+    def frame(self):
+        # print("Frame in thread : ", threading.current_thread().ident)
+
+        self.temps += 1
+        self.ihm["temps"]["text"] = "Temps : "+str(self.temps)
+        self.ihm["episode"]["text"] = "Episode : "+str(self.episode)
+
+        self.actualise_ships()
+        self.actualise_lasers()
         # print("{} - {}".format(len(self.battleground.lasers), len(self.images.lasers)))
-
-
-        # self.ihm["carte"].coords(self.images.mass_center[0], self.battleground.center_of_mass.x-ship.body.radius, self.battleground.center_of_mass.y-ship.body.radius, self.battleground.center_of_mass.x+ship.body.radius, self.battleground.center_of_mass.y+ship.body.radius)
-
-        # self.ihm["carte"].coords(self.images.best_pos[0], self.battleground.best_pos.x-ship.body.radius, self.battleground.best_pos.y-ship.body.radius, self.battleground.best_pos.x+ship.body.radius, self.battleground.best_pos.y+ship.body.radius)
-
         self.clear_wreckage()
 
         if not self.training_mode:
             # sleep time goes from 2s to 1ms (0.5 fps to 1000fps)
             self.sleep_time = 1 / (10 ** self.ihm["vitesse"].get())
-
 
         if hasattr(self.battleground.ships[0].agent, "trainer") and \
                 hasattr(self.battleground.ships[0].agent.trainer, "epsilon") and \
@@ -686,13 +479,27 @@ class Ofighters(MapMenuStruct):
             self.ihm["exploration"].set(self.battleground.ships[0].agent.trainer.epsilon)
             # print("DECAY TO ", self.battleground.ships[0].agent.trainer.epsilon)
 
+        # All bots share the same trainer so we only apply on one
+        # if hasattr(self.battleground.ships[0].agent, "losses"):
+        #     self.animate_loss(self.battleground.ships[0].agent.losses)
 
+        # if self.fps_manager.active:
+        #     self.ihm["fps"]["text"] = "FPS " + str(self.fps_manager.fps)
 
+        if self.continuous_training and self.temps > MAX_TIME:
+            self.restart()
+        else:
+            # TODO must be first no ?
+            self.battleground.frame()
 
-        sleep(self.sleep_time)
+        if self.quitter:
+            self.master.quit()
+            self.master.destroy()
+        else:
+            # print("after", int(1000 * self.sleep_time))
+            self.master.after(int(1000 * self.sleep_time), self.frame)
 
-        self.battleground.frame()
-        # TODO must be first no ?
+        # sleep(self.sleep_time)
 
 
     def clear_wreckage(self):
@@ -720,29 +527,41 @@ class Ofighters(MapMenuStruct):
             self.save_records(os.path.join(RECORD_FOLDER, "ofighter_record_" + now()))
 
 
+    # self.loss_index = count()
+    def animate_loss(self):
+        if not self.quitter:
+            # All bots share the same trainer so we only apply on one
+            if hasattr(self.battleground.ships[0].agent, "losses") and self.len_losses != len(self.battleground.ships[0].agent.losses):
+                # print("animating in thread : ", threading.current_thread().ident)
+                losses = self.battleground.ships[0].agent.losses
+                self.len_losses = len(losses)
+                self.ax_losses.cla()
+                print("losses", losses)
+
+                # x = range(len(losses))
+                self.ax_losses.plot(losses, label='Loss', linewidth=1.5)
+                if len(losses) > 5:
+                    # 'full', 'same', 'valid'
+                    losses_5 = np.convolve(np.array(losses), np.ones((5,))/5, mode='same')
+                    self.ax_losses.plot(losses_5, label='Loss on a 5 steps window')
+                self.ax_losses.legend(loc='upper left')
+                plt.pause(0.5)
+
+                # self.line_losses.set_data(range(len(losses)), losses) # set plot data
+                # self.ax_losses.lines[0].set_data(range(len(losses)), losses) # set plot data
+                # self.ax_losses.relim()                  # recompute the data limits
+                # self.ax_losses.autoscale_view()         # automatic axis scaling
+                # self.fig.canvas.draw()
+                # self.fig.canvas.flush_events()   # update the plot and take care of window events (like resizing etc.)
+                # sleep(0.2)               # wait for next loop iteration
+
+            self.master.after(500, self.animate_loss)
+
+
     def run(self):
-        # images contains tkinter graphical objects
-        # lasers contains (index, object) indexes of ships images 
-        # and corresponding object in the battleground
-        # lasers contains indexes of ships images
-        self.todelete = {"images" : [], "lasers" : [], "ships" : []}
+        self.master.after(0, self.frame)
 
-        while not self.quitter:
 
-            self.temps += 1
-            self.ihm["temps"]["text"] = "Temps : "+str(self.temps)
-
-            self.ihm["episode"]["text"] = "Episode : "+str(self.episode)
-
-            self.frame()
-
-            if self.fps_manager.active:
-                self.ihm["fps"]["text"] = "FPS " + str(self.fps_manager.fps)
-
-            if self.continuous_training and self.temps > MAX_TIME:
-                self.restart()
-
-        self.master.destroy()
 
 
 
@@ -753,9 +572,7 @@ class Ofighters(MapMenuStruct):
 #     sys.stdout = sys.__stdout__
 
 
-
-# Battleground().run()
-
-Ofighters()
+if __name__ == "__main__":
+    Ofighters()
 
 

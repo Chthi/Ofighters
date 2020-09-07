@@ -138,8 +138,8 @@ class Trainer:
         # action = ActionOneHot(vector=act_vector)
         return iaction
 
-    def remember(self, state, iaction, reward, next_state):
-        self.memory.append([state, iaction, reward, next_state])
+    def remember(self, state, iaction, reward, next_state, done):
+        self.memory.append([state, iaction, reward, next_state, done])
 
     def replay(self, batch_size):
         batch_size = min(batch_size, len(self.memory))
@@ -153,7 +153,7 @@ class Trainer:
 
         with self.session.as_default():
             with self.graph.as_default():
-                for i, (obs, iaction, reward, next_obs) in enumerate(minibatch):
+                for i, (obs, iaction, reward, next_obs, done) in enumerate(minibatch):
                     # target = self.model.predict(obs.vector.T)[0]
 
                     img_input = np.expand_dims(np.stack((obs.ship_map, obs.laser_map), axis=2), axis=0)
@@ -173,7 +173,8 @@ class Trainer:
                     img_input = np.expand_dims(np.stack((next_obs.ship_map, next_obs.laser_map), axis=2), axis=0)
                     prediction = self.model.predict([img_input, next_obs.vector[:8].T], workers=8, use_multiprocessing=True)[0]
                     # print("prediction", prediction)
-                    target[iaction] = reward + self.gamma * np.max(prediction)
+                    # second term is 0 if done is true
+                    target[iaction] = reward + self.gamma * np.max(prediction) * int(not done)
 
                     inputs1[i] = img_input
                     inputs2[i] = next_obs.vector[:8].T
@@ -195,8 +196,9 @@ class Trainer:
 
 
 from math import log
-DECAY = 0.9995
-print("Time before decaying to 1% :", log(0.01) / log(DECAY) )
+# MAX_TIME = 200
+DECAY = 0.99990
+print("Time before decaying to 1% :", log(0.01) / log(DECAY) / 200, "episodes." )
 # TRAINER = Trainer(learning_rate=0.001, epsilon_decay=0.999995, batch_size=8)
 TRAINER = Trainer(learning_rate=0.001, epsilon_decay=DECAY, batch_size=8,
                   name="conv2d_batchnorm"
@@ -229,9 +231,10 @@ class QlearnIA(Agent):
         # an agent that can play for the network if it need content or initialisation
         self.collecting_agent = Agent("random")
         self.batch_size = 8
-        self.losses = [0]
+        self.losses = []
         self.epsilons = []
         # self.exploration = 0.1
+        self.done = False
 
         self.trainer = TRAINER
 
@@ -255,11 +258,22 @@ class QlearnIA(Agent):
         # All bots share the same trainer so we only save it once
         if self.id == 1:
             self.epsilons.append(self.trainer.epsilon)
+        self.done = False
 
 
     def play(self, obs):
+        # play will be called even after the ship death so he can observe if he wants
+        # but here we only remember the last losing frame and we don't care after
+        # and just give anything (that will not be played anyway)
+        if self.done:
+            return None
+
+        if obs.done:
+            self.done = True
+
         if self.previous_obs is not None and self.previous_action is not None:
-            self.trainer.remember(self.previous_obs, self.previous_action, obs.reward, obs)
+            # TODO maybe we can only save obs ? better ?
+            self.trainer.remember(self.previous_obs, self.previous_action, obs.reward, obs, obs.done)
 
         # we start with a sequence to collect information (still with learning)
         if (self.total_steps < self.collecting_steps):# or (random.random() < self.exploration) :
@@ -275,6 +289,7 @@ class QlearnIA(Agent):
         # self.previous_action = action.vector
 
         # All bots share the same trainer so we only save it once
+        # and replay it once as remember is also shared
         if self.id == 1:
             if self.total_steps % 50 == 0:
                 l = self.trainer.replay(self.batch_size)

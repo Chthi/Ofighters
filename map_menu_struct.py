@@ -30,6 +30,9 @@ def counter():
 
 
 class MapMenuStruct():
+    """Standard structure for the graphical component.
+    Any object inheriting this one will be a graphical interface.
+    Features can be added, overwritten and command should be changed."""
 
     def __init__(self, largeur=800, hauteur=800):
         # all the objects, parts and widgets of the interface
@@ -262,7 +265,6 @@ class MapMenuStruct():
 
 
     def swap_training_mode(self):
-        # TODO replace all the things at the right place (use grid ?)
         if self.ihm["string_training_mode"].get() == "yes":
             self.expand_map()
         elif self.ihm["string_training_mode"].get() == "no":
@@ -270,7 +272,6 @@ class MapMenuStruct():
 
 
     def swap_continuous_training(self):
-        # TODO replace all the things at the right place (use grid ?)
         if self.ihm["string_continuous_training"].get() == "yes":
             self.continuous_training = True
 

@@ -70,13 +70,13 @@ class Ship():
         # TODO improve. for the moment the score and steps are reset if the bot change in the middle
         if behavior == "network":
             self.agent = BrAIn()
-            self.initial_agent = BrAIn()
+            # self.initial_agent = BrAIn()
         elif behavior == "q_learning":
             self.agent = QlearnIA()
-            self.initial_agent = QlearnIA()
+            # self.initial_agent = QlearnIA()
         else:
             self.agent = Agent(behavior)
-            self.initial_agent = Agent(behavior)
+            # self.initial_agent = Agent(behavior)
 
         # if the ia is in leroy mode time > 0
         self.leroy_time = 0
@@ -94,14 +94,16 @@ class Ship():
         self.act_vector = np.array([])
 
 
-    def reset(self):
-        # print("SHIP RESET")
+    def reset(self, x=None, y=None):
+        print("SHIP RESET")
         # print(self.agent)
         self.agent.reset()
 
         self.time = 0
         self.speed = 0
         self.pointing = Point(self.body.x, self.body.y)
+        self.body.x = x or self.body.x
+        self.body.y = y or self.body.y
         self.state = "flying"
         self.can_shoot = 1
 
@@ -195,10 +197,17 @@ class Ship():
         # obs become a state relative to each different ship (could be fog of war or just the position)
         obs.analyse_ship(self)
 
+        if obs.done:
+            self.agent.step(obs)
+            return None
+
         if self.player:
             action = self.read_keys()
         else:
             action = self.agent.step(obs)
+
+        if not action:
+            return None
 
         if hasattr(self.agent, 'obs_vector') and self.agent.obs_vector.size > 0:
             self.obs_vector = self.agent.obs_vector
@@ -236,7 +245,7 @@ class Ship():
         self.time += 1
 
         # If ship is destroyed ship can only contemplate sadness and despair
-        if not self.is_playable():
+        if not action or not self.is_playable():
             return None
 
         self.actualise = False

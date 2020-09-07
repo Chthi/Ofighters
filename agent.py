@@ -88,6 +88,10 @@ class Agent():
 
         self.obs_vector = obs.vector
         action = self.bot_play(obs)
+
+        if not action:
+            return None
+
         self.act_vector = action.vector
 
         # print("obs_vector shape\n", obs_vector.shape)
