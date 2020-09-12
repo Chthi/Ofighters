@@ -21,6 +21,11 @@ import matplotlib.cm as cm
 
 from couple import Point
 
+REWARDS = {
+    "death" : -8,
+    "kill" : 1,
+}
+
 LIGHT_SPEED = 1 # proportionally change the speed of lasers
 
 
@@ -65,7 +70,7 @@ class Laser():
             # we pass through destroyed ships
             if ship.is_playable() and self.body.collide(ship.body):
                 # Destroying other ships sparks joy in ship
-                self.owner.agent.reward += 1
+                self.owner.agent.reward += REWARDS["kill"]
                 self.owner.battleground.last_x_time_rewards.append((1, self.battleground.time))
                 ship.hit(self)
                 explode = True

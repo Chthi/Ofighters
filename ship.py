@@ -37,6 +37,11 @@ LEROY_RATE = 0.0
 # LEROY_RATE = 0.01
 
 
+REWARDS = {
+    "death" : -8,
+    "kill" : 1,
+}
+
 
 class Ship():
     id_max = 1
@@ -67,13 +72,20 @@ class Ship():
         self.can_shoot = 1
         # the human player controlling it. None if no player controls it
         self.player = None
+
+        self.color = "Yellow"
+        self.laser_color = "Red"
+
         # TODO improve. for the moment the score and steps are reset if the bot change in the middle
         if behavior == "network":
             self.agent = BrAIn()
             # self.initial_agent = BrAIn()
-        elif behavior == "q_learning":
+        elif behavior == "QlearnIA":
             self.agent = QlearnIA()
             # self.initial_agent = QlearnIA()
+            # self.color = '#AA3300'
+            self.color = "Green"
+            self.laser_color = "Pink"
         else:
             self.agent = Agent(behavior)
             # self.initial_agent = Agent(behavior)
@@ -85,9 +97,6 @@ class Ship():
         self.actualise = False
 
         #  the ship is colorful
-        # self.color = '#AA3300'
-        self.color = "Yellow"
-        self.laser_color = "Red"
         self.laser_speed = 10
 
         self.obs_vector = np.array([])
@@ -110,9 +119,11 @@ class Ship():
         self.obs_vector = np.array([])
         self.act_vector = np.array([])
 
-
     def is_playable(self):
         return self.state not in ["destroyed", "wreckage"]
+
+    def is_super_bot(self):
+        return self.agent.behavior in ["network", "QlearnIA"]
 
     def assign_player(self, player):
         self.player = player
@@ -165,7 +176,7 @@ class Ship():
     def explode(self):
         # print("baaouummm")
         # dying is bad, remember
-        self.agent.reward -= 10
+        self.agent.reward += REWARDS["death"]
         self.battleground.last_x_time_rewards.append((10, self.battleground.time))
         self.state = "destroyed"
 

@@ -126,7 +126,7 @@ class Trainer:
                 act_values = self.model.predict([img_input, obs.vector[:8].T], workers=8, use_multiprocessing=True)[0]
 
         # Pick the action based on the predicted reward
-        iaction =  np.argmax(act_values[0])
+        iaction =  np.argmax(act_values)
 
         print("prediction", act_values)
         ACTION = ["shoot", "thrust", "turn"]
@@ -225,7 +225,6 @@ class QlearnIA(Agent):
     def __init__(self):
         # we define our own bot called QlearnIA with a behavior define by the function play
         super().__init__(behavior="QlearnIA", bot=self)
-
         self.id = QlearnIA.max_id
         QlearnIA.max_id += 1
         # an agent that can play for the network if it need content or initialisation
@@ -269,6 +268,11 @@ class QlearnIA(Agent):
             return None
 
         if obs.done:
+            l = self.trainer.replay(self.batch_size)
+            self.losses.append(l.history['loss'][0])
+            if self.episode % 1 == 0:
+                print("episode: {}, moves: {}, score: {}, epsilon: {}, loss: {}"
+                      .format(self.episode, self.steps, self.score, self.trainer.epsilon, self.losses[-1]))
             self.done = True
 
         if self.previous_obs is not None and self.previous_action is not None:
@@ -290,6 +294,7 @@ class QlearnIA(Agent):
 
         # All bots share the same trainer so we only save it once
         # and replay it once as remember is also shared
+        # print("total steps / 50", self.total_steps / 50)
         if self.id == 1:
             if self.total_steps % 50 == 0:
                 l = self.trainer.replay(self.batch_size)

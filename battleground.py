@@ -10,12 +10,25 @@ from ship import Ship
 
 class Battleground():
     # TODO parameter to pass nb of IA of each type
-    def __init__(self, state=None, ship_number=2, largeur=DEFAULT_WIDTH, hauteur=DEFAULT_HEIGHT, networks=[]):
+    def __init__(self, state=None, ships=2, largeur=DEFAULT_WIDTH, hauteur=DEFAULT_HEIGHT, networks=[]):
         """Create a battleground with ships
         networks must be a list of size ship_number containing neural networks
-        if not set the networks will be generated randomly"""
+        if not set the networks will be generated randomly
+        ships : (int) the following number of ships will be created with default behavior
+                (dict) {"behavior" : number} n ships of each behavior will be created
+        """
         self.background = '#000000'
-        self.ships_number = ship_number
+
+        default_behavior = "random" # "q_learning"
+        if isinstance(ships, dict):
+            self.ships_map = ships
+            self.ships_number = len(ships)
+        elif isinstance(ships, int):
+            self.ships_number = ships
+            self.ships_map = {default_behavior : ships}
+        else:
+            raise Exception("ships argument must be int or dict.")
+
         self.time = 0
         self.dim = Couple(largeur, hauteur)
         self.ships = []
@@ -63,11 +76,9 @@ class Battleground():
                 self.ships.append(Ship(randint(0, largeur), randint(0, hauteur), self, self.networks[x]))
         """
 
-        for x in range(self.ships_number):
-            # network random
-            # self.ships.append(Ship(randint(0, largeur), randint(0, hauteur), self, behavior="network"))
-            self.ships.append(Ship(randint(0, largeur), randint(0, hauteur), self, behavior="q_learning"))
-            # self.ships.append(Ship(randint(0, largeur), randint(0, hauteur), self, behavior="random"))
+        for behavior, number in self.ships_map.items():
+            for n in range(number):
+                self.ships.append(Ship(randint(0, largeur), randint(0, hauteur), self, behavior=behavior))
 
         # print("there")
         # self.time_list = [self.time]

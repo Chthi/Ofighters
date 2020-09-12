@@ -41,7 +41,8 @@ import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 
 
-SHIPS_NUMBER = 7
+# the potential player in included in random bots
+SHIPS_MAP = {"random" : 6, "QlearnIA" : 1}
 
 MAP_PRECISION = 4
 
@@ -51,6 +52,8 @@ ANTICIPATION = 100
 RECORD_FOLDER = "ofighter_records"
 
 DISPLAY_LOSSES = True
+DISPLAY_SCORES = True
+DISPLAY_EPSILONS = True
 
 def now():
     return datetime.datetime.now().strftime("%y-%m-%d-%H-%M-%S")
@@ -85,7 +88,17 @@ class Ofighters(MapMenuStruct):
 
         plt.style.use('fivethirtyeight')
 
-        self.battleground = Battleground(ship_number=SHIPS_NUMBER, largeur=self.dim.x, hauteur=self.dim.y)
+        self.battleground = Battleground(ships=SHIPS_MAP, largeur=self.dim.x, hauteur=self.dim.y)
+
+        # optional if at least one QlearnIA bot is present
+        self._super_bot_one = None
+        for ship in self.battleground.ships:
+            # print("ship.agent.behavior", ship.agent.behavior)
+            if ship.agent.behavior == "QlearnIA":
+                # reference. read only. should not be modified.
+                self._super_bot_one = ship
+                break
+
         self.switch_session("default")
 
         Images = namedtuple("Images", ['ships', 'lasers', ])
@@ -121,29 +134,57 @@ class Ofighters(MapMenuStruct):
 
         # losses graphic window
         if DISPLAY_LOSSES:
-            # plt.ion()
-            self.fig = plt.figure()
-            self.ax_losses = self.fig.add_subplot(1,1,1)
-            # self.ax_losses = plt.subplot(111)
-            self.ax_losses.set_xlabel('Replays')
-            self.ax_losses.set_ylabel('Loss')
-            self.len_losses = 1
-            # self.line_losses, = self.ax_losses.plot([0], [0])
-            plt.tight_layout()
-            self.master.after(1000, self.animate_loss)
-            # self.master.after(0, plt.show)
-            self.master.after(0, self.fig.show)
-            print("showed")
+            self.init_losses_graph()
+
+        # scores graphic window
+        if DISPLAY_SCORES:
+            self.init_scores_graph()
+
+        # epsilons (exploration rate) graphic window
+        if DISPLAY_EPSILONS:
+            self.init_epsilons_graph()
 
         # run the main thread/loop
         print("mainloop")
         self.master.mainloop()
 
-    def add_plot(self):
-        x_vals = [0, 1, 2, 3, 4, 5]
-        y_vals = [0, 1, 3, 2, 3, 5]
-        plt.plot(x_vals, y_vals)
-        plt.show()
+
+    def init_losses_graph(self):
+        # plt.ion()
+        self.fig_losses = plt.figure()
+        self.ax_losses = self.fig_losses.add_subplot(1,1,1)
+        # self.ax_losses = plt.subplot(111)
+        self.ax_losses.set_xlabel('Replays')
+        self.ax_losses.set_ylabel('Loss')
+        self.len_losses = 1
+        # self.line_losses, = self.ax_losses.plot([0], [0])
+        plt.tight_layout()
+        self.master.after(1000, self.animate_loss)
+        # self.master.after(0, plt.show)
+        self.master.after(0, self.fig_losses.show)
+        print("showed losses")
+
+    def init_scores_graph(self):
+        self.fig_scores = plt.figure()
+        self.ax_scores = self.fig_scores.add_subplot(1,1,1)
+        self.ax_scores.set_xlabel('Episodes')
+        self.ax_scores.set_ylabel('Score')
+        self.len_scores = 1
+        plt.tight_layout()
+        self.master.after(1000, self.animate_score)
+        self.master.after(0, self.fig_scores.show)
+        print("showed scores")
+
+    def init_epsilons_graph(self):
+        self.fig_epsilons = plt.figure()
+        self.ax_epsilons = self.fig_epsilons.add_subplot(1,1,1)
+        self.ax_epsilons.set_xlabel('Episodes')
+        self.ax_epsilons.set_ylabel('Epsilon (exploration rate)')
+        self.len_epsilons = 1
+        # plt.tight_layout()
+        self.master.after(1000, self.animate_epsilon)
+        self.master.after(0, self.fig_epsilons.show)
+        print("showed epsilons")
 
     def restart(self):
         print("restart")
@@ -164,6 +205,8 @@ class Ofighters(MapMenuStruct):
         # not used anymore as the ships objects are not deleted and the player stays in the ship until destroyed
         # if self.ihm["string_transfer_player"].get() == "yes" and self.ihm["string_training_mode"].get() == "no":
         #     self.transfer_player_ship()
+        self.animate_score()
+        self.animate_epsilon()
         self.temps = 0
         self.episode += 1
 
@@ -231,7 +274,7 @@ class Ofighters(MapMenuStruct):
         i = 0
         assigned = False
         while not assigned and i < len(self.battleground.ships):
-            if self.battleground.ships[i].is_playable():
+            if self.battleground.ships[i].is_playable() and not self.battleground.ships[i].is_super_bot():
                 player1 = Player("mouse", self.master, self.ihm["carte"])
                 self.battleground.ships[i].assign_player(player1)
                 if len(self.images.ships) > i:
@@ -376,8 +419,8 @@ class Ofighters(MapMenuStruct):
 
     def actualise_exploration(self, value):
         # All bots share the same trainer so we only apply on one
-        if hasattr(self.battleground.ships[0].agent, "trainer") and hasattr(self.battleground.ships[0].agent.trainer, "epsilon"):
-            self.battleground.ships[0].agent.trainer.epsilon = float(value)
+        if hasattr(self._super_bot_one.agent, "trainer") and hasattr(self._super_bot_one.agent.trainer, "epsilon"):
+            self._super_bot_one.agent.trainer.epsilon = float(value)
 
 
     def assign_ship_image(self, i, ship):
@@ -473,15 +516,15 @@ class Ofighters(MapMenuStruct):
             # sleep time goes from 2s to 1ms (0.5 fps to 1000fps)
             self.sleep_time = 1 / (10 ** self.ihm["vitesse"].get())
 
-        if hasattr(self.battleground.ships[0].agent, "trainer") and \
-                hasattr(self.battleground.ships[0].agent.trainer, "epsilon") and \
+        if hasattr(self._super_bot_one.agent, "trainer") and \
+                hasattr(self._super_bot_one.agent.trainer, "epsilon") and \
                 "exploration" in self.ihm:
-            self.ihm["exploration"].set(self.battleground.ships[0].agent.trainer.epsilon)
-            # print("DECAY TO ", self.battleground.ships[0].agent.trainer.epsilon)
+            self.ihm["exploration"].set(self._super_bot_one.agent.trainer.epsilon)
+            # print("DECAY TO ", self._super_bot_one.agent.trainer.epsilon)
 
         # All bots share the same trainer so we only apply on one
-        # if hasattr(self.battleground.ships[0].agent, "losses"):
-        #     self.animate_loss(self.battleground.ships[0].agent.losses)
+        # if hasattr(self._super_bot_one.agent, "losses"):
+        #     self.animate_loss(self._super_bot_one.agent.losses)
 
         # if self.fps_manager.active:
         #     self.ihm["fps"]["text"] = "FPS " + str(self.fps_manager.fps)
@@ -527,35 +570,76 @@ class Ofighters(MapMenuStruct):
             self.save_records(os.path.join(RECORD_FOLDER, "ofighter_record_" + now()))
 
 
-    # self.loss_index = count()
     def animate_loss(self):
-        if not self.quitter:
-            # All bots share the same trainer so we only apply on one
-            if hasattr(self.battleground.ships[0].agent, "losses") and self.len_losses != len(self.battleground.ships[0].agent.losses):
-                # print("animating in thread : ", threading.current_thread().ident)
-                losses = self.battleground.ships[0].agent.losses
-                self.len_losses = len(losses)
-                self.ax_losses.cla()
-                print("losses", losses)
+        # All bots share the same trainer so we only apply on one
+        if hasattr(self._super_bot_one.agent, "losses") and self.len_losses != len(self._super_bot_one.agent.losses):
+            # print("animating in thread : ", threading.current_thread().ident)
+            losses = self._super_bot_one.agent.losses
+            self.len_losses = len(losses)
+            self.ax_losses.cla()
+            print("losses", losses)
 
-                # x = range(len(losses))
-                self.ax_losses.plot(losses, label='Loss', linewidth=1.5)
-                if len(losses) > 5:
-                    # 'full', 'same', 'valid'
-                    losses_5 = np.convolve(np.array(losses), np.ones((5,))/5, mode='same')
-                    self.ax_losses.plot(losses_5, label='Loss on a 5 steps window')
-                self.ax_losses.legend(loc='upper left')
-                plt.pause(0.5)
+            # x = range(len(losses))
+            self.ax_losses.plot(losses, label='Loss', linewidth=1.5)
+            if len(losses) > 10:
+                # 'full', 'same', 'valid'
+                losses_10 = np.convolve(np.array(losses), np.ones((10,))/10, mode='same')
+                self.ax_losses.plot(losses_10, label='Loss on a 10 steps window')
+            self.ax_losses.legend(loc='upper left')
+            plt.pause(0.5)
 
-                # self.line_losses.set_data(range(len(losses)), losses) # set plot data
-                # self.ax_losses.lines[0].set_data(range(len(losses)), losses) # set plot data
-                # self.ax_losses.relim()                  # recompute the data limits
-                # self.ax_losses.autoscale_view()         # automatic axis scaling
-                # self.fig.canvas.draw()
-                # self.fig.canvas.flush_events()   # update the plot and take care of window events (like resizing etc.)
-                # sleep(0.2)               # wait for next loop iteration
+            # self.line_losses.set_data(range(len(losses)), losses) # set plot data
+            # self.ax_losses.lines[0].set_data(range(len(losses)), losses) # set plot data
+            # self.ax_losses.relim()                  # recompute the data limits
+            # self.ax_losses.autoscale_view()         # automatic axis scaling
+            # self.fig.canvas.draw()
+            # self.fig.canvas.flush_events()   # update the plot and take care of window events (like resizing etc.)
+            # sleep(0.2)               # wait for next loop iteration
 
-            self.master.after(500, self.animate_loss)
+        self.master.after(500, self.animate_loss)
+
+
+    def animate_score(self):
+        # All bots share the same trainer so we only apply on one
+        if hasattr(self._super_bot_one.agent, "scores") and self.len_scores != len(self._super_bot_one.agent.scores):
+            # print("animating in thread : ", threading.current_thread().ident)
+            scores = self._super_bot_one.agent.scores
+            self.len_scores = len(scores)
+            self.ax_scores.cla()
+            print("scores", scores)
+
+            # x = range(len(scores))
+            self.ax_scores.plot(scores, label='Score', linewidth=1.5)
+            if len(scores) > 10:
+                # 'full', 'same', 'valid'
+                scores_10 = np.convolve(np.array(scores), np.ones((10,))/10, mode='same')
+                self.ax_scores.plot(scores_10, label='Score on a 10 steps window', color="green")
+            self.ax_scores.legend(loc='upper left')
+            plt.pause(0.5)
+        # called at each restart instead
+        # self.master.after(500, self.animate_score)
+
+
+    def animate_epsilon(self):
+        # All bots share the same trainer so we only apply on one
+        if hasattr(self._super_bot_one.agent, "epsilons") and self.len_epsilons != len(self._super_bot_one.agent.epsilons):
+            # print("animating in thread : ", threading.current_thread().ident)
+            epsilons = self._super_bot_one.agent.epsilons
+            self.len_epsilons = len(epsilons)
+            self.ax_epsilons.cla()
+            print("epsilons", epsilons)
+
+            # x = range(len(epsilons))
+            self.ax_epsilons.plot(epsilons, label='Epsilon', linewidth=1.5) # color="magenta"
+            self.ax_epsilons.set_ylim(0, 1.05)
+            # if len(epsilons) > 10:
+                # 'full', 'same', 'valid'
+                # epsilons_10 = np.convolve(np.array(epsilons), np.ones((10,))/10, mode='same')
+                # self.ax_epsilons.plot(epsilons_10, label='Epsilon on a 10 steps window', color="magenta")
+            self.ax_epsilons.legend(loc='upper left')
+            plt.pause(0.5)
+        # called at each restart instead
+        # self.master.after(500, self.animate_epsilon)
 
 
     def run(self):
