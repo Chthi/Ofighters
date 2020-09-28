@@ -7,6 +7,8 @@ import os
 from collections import namedtuple, deque
 
 from time import sleep, time
+from random import random
+
 import tkinter as tk
 from tkinter import ttk
 from tkinter import *
@@ -17,7 +19,7 @@ from popups import Alert
 from thread_manager import spawnthread
 
 # minimum sleep time between frames to garranty to not freeze the machine
-MIN_SLEEP = 0.0005 # 5 ms
+MIN_SLEEP = 0.001 # 1 ms
 
 
 
@@ -47,9 +49,10 @@ class MapMenuStruct():
         self.fps = 1
         self.sleep_time = 1
         
-        # modes
+        # modes on/off
         self.quitter = False
         self.training_mode = False
+        self.is_learning = True
         self.continuous_training = False
 
 
@@ -99,13 +102,14 @@ class MapMenuStruct():
         self.place_transfer_player()
         # self.place_supervised()
         self.place_unsupervised()
+        self.place_restart()
         self.place_quit()
 
 
     def place_speed(self):
         self.ihm["label_speed"] = tk.Label(self.latRight, 
             text="Speed", font="Ubuntu 14")
-        self.ihm["label_speed"].grid(row=next(self.latRightRowCount), column=0, pady=(35,5))
+        self.ihm["label_speed"].grid(row=next(self.latRightRowCount), column=0, pady=(35,0))
 
         self.ihm["vitesse"] = tk.Scale(
             self.latRight, orient="horizontal", 
@@ -120,10 +124,10 @@ class MapMenuStruct():
     def place_log_speed(self):
         self.ihm["label_speed"] = tk.Label(self.latRight,
             text="Speed", font="Ubuntu 14")
-        self.ihm["label_speed"].grid(row=next(self.latRightRowCount), column=0, pady=(35,5))
+        self.ihm["label_speed"].grid(row=next(self.latRightRowCount), column=0, pady=(20,0))
 
         self.ihm["label_log_speed"] = tk.Label(self.latRight, text="")
-        self.ihm["label_log_speed"].grid(row=next(self.latRightRowCount), column=0, pady=(35,5))
+        self.ihm["label_log_speed"].grid(row=next(self.latRightRowCount), column=0)#, pady=(35,5))
 
         def actualise_label(value):
             self.ihm["label_log_speed"].config(text=f"{10**float(value):.1f}")
@@ -140,21 +144,6 @@ class MapMenuStruct():
         self.ihm["vitesse"].grid(row=next(self.latRightRowCount), column=0)
 
 
-    def place_exploration_rate(self):
-        self.ihm["label_exploration_rate"] = tk.Label(self.latRight,
-            text="Exploration", font="Ubuntu 12")
-        self.ihm["label_exploration_rate"].grid(row=next(self.latRightRowCount), column=0, pady=(35,5))
-
-        self.ihm["exploration"] = tk.Scale(
-            self.latRight, orient="horizontal",
-            from_=0, to=1, resolution=0.01,
-            tickinterval=1, length=100
-            )
-        self.ihm["exploration"].set(1)
-        # self.ihm["exploration"].pack()
-        self.ihm["exploration"].grid(row=next(self.latRightRowCount), column=0)
-
-
     def place_transfer_player(self):
         self.ihm["string_transfer_player"] = tk.StringVar()
         self.ihm["check_transfer_player"] = tk.Checkbutton(
@@ -168,70 +157,119 @@ class MapMenuStruct():
 
 
     def place_supervised(self):
-        self.ihm["label_supervised"] = tk.Label(self.latRight, 
-            text="Supervised learning", font="Ubuntu 14")
-        self.ihm["label_supervised"].grid(row=next(self.latRightRowCount), column=0, pady=(35,5))
+        # define elements
+        def place_title():
+            self.ihm["label_supervised"] = tk.Label(self.latRight,
+                text="Supervised learning", font="Ubuntu 14")
+            self.ihm["label_supervised"].grid(row=next(self.latRightRowCount), column=0, pady=(20,0))
 
-        # check button to record actions taken by the player
-        self.ihm["string_recording"] = tk.StringVar()
-        self.ihm["check_recording"] = tk.Checkbutton(
-            self.latRight, variable=self.ihm["string_recording"], 
-            text='Record', 
-            onvalue='yes', offvalue='no', anchor='sw'
-        )
-        # self.ihm["check_recording"].pack(side=tk.LEFT)
-        self.ihm["check_recording"].grid(row=next(self.latRightRowCount), column=0)
-        self.ihm["check_recording"].deselect()
+        def place_button_recording():
+            # check button to record actions taken by the player
+            self.ihm["string_recording"] = tk.StringVar()
+            self.ihm["check_recording"] = tk.Checkbutton(
+                self.latRight, variable=self.ihm["string_recording"],
+                text='Record',
+                onvalue='yes', offvalue='no', anchor='sw'
+            )
+            # self.ihm["check_recording"].pack(side=tk.LEFT)
+            self.ihm["check_recording"].grid(row=next(self.latRightRowCount), column=0)
+            self.ihm["check_recording"].deselect()
 
-        # button to use recorded actions to train the network
-        self.ihm["train"] = tk.Button(self.latRight, text="Train")
-        # self.ihm["train"].pack()
-        self.ihm["train"].grid(row=next(self.latRightRowCount), column=0)
+        def place_button_train():
+            # button to use recorded actions to train the network
+            self.ihm["train"] = tk.Button(self.latRight, text="Train")
+            # self.ihm["train"].pack()
+            self.ihm["train"].grid(row=next(self.latRightRowCount), column=0)
 
-        self.ihm["progress"] = ttk.Progressbar(self.latRight, orient="horizontal",
-                                length=200, mode="determinate")
-        # we save the row on the grid where the loading bar must be placed
-        # TODO automatize that for everything
-        self.ihm["grid_raw_progress"] = next(self.latRightRowCount)
-        self.ihm["progress"]["maximum"] = 100
-        # self.ihm["progress"].grid(row=self.ihm["grid_raw_progress"], column=0)
-        self.ihm["progress"]["value"] = 0
+        def place_progressbar():
+            self.ihm["progress"] = ttk.Progressbar(self.latRight, orient="horizontal",
+                                    length=200, mode="determinate")
+            # we save the row on the grid where the loading bar must be placed
+            # TODO automatize that for everything
+            self.ihm["grid_raw_progress"] = next(self.latRightRowCount)
+            self.ihm["progress"]["maximum"] = 100
+            # self.ihm["progress"].grid(row=self.ihm["grid_raw_progress"], column=0)
+            self.ihm["progress"]["value"] = 0
 
-        # button to save the curent working ia
-        # TODO what if multiple are running ?
-        self.ihm["save_ia"] = tk.Button(self.latRight, text="Save this IA")
-        # self.ihm["save_ia"].pack()
-        self.ihm["save_ia"].grid(row=next(self.latRightRowCount), column=0)
+        def place_button_saveIA():
+            # button to save the curent working ia
+            # TODO what if multiple are running ?
+            self.ihm["save_ia"] = tk.Button(self.latRight, text="Save this IA")
+            # self.ihm["save_ia"].pack()
+            self.ihm["save_ia"].grid(row=next(self.latRightRowCount), column=0)
+
+        # place elements
+        place_title()
+        place_button_recording()
+        place_button_train()
+        place_progressbar()
+        place_button_saveIA()
 
 
     def place_unsupervised(self):
-        self.ihm["label_unsupervised"] = tk.Label(self.latRight, 
-            text="Unsupervised learning", font="Ubuntu 14")
-        self.ihm["label_unsupervised"].grid(row=next(self.latRightRowCount), column=0, pady=(35,5))
+        # define elements
+        def place_title():
+            self.ihm["label_unsupervised"] = tk.Label(self.latRight,
+                text="Unsupervised learning", font="Ubuntu 14")
+            self.ihm["label_unsupervised"].grid(row=next(self.latRightRowCount), column=0, pady=(20,0))
 
-        # button to switch to training mode
-        # no graphical visualisation, maximum speeds
-        self.ihm["string_training_mode"] = tk.StringVar()
-        self.ihm["check_training_mode"] = tk.Checkbutton(
-            self.latRight, variable=self.ihm["string_training_mode"], text='Training mode', 
-            onvalue='yes', offvalue='no', anchor='sw', command=self.swap_training_mode
-        )
-        # self.ihm["check_training_mode"].pack(side=tk.LEFT)
-        self.ihm["check_training_mode"].grid(row=next(self.latRightRowCount), column=0)
-        self.ihm["check_training_mode"].deselect()
+        def place_button_training_mode():
+            # button to switch to training mode
+            # no graphical visualisation, maximum speeds
+            self.ihm["string_training_mode"] = tk.StringVar()
+            self.ihm["check_training_mode"] = tk.Checkbutton(
+                self.latRight, variable=self.ihm["string_training_mode"], text='Training mode',
+                onvalue='yes', offvalue='no', anchor='sw', command=self.swap_training_mode
+            )
+            # self.ihm["check_training_mode"].pack(side=tk.LEFT)
+            self.ihm["check_training_mode"].grid(row=next(self.latRightRowCount), column=0)
+            self.ihm["check_training_mode"].deselect()
 
-        # allows to restart the simulation every few times
-        self.ihm["string_continuous_training"] = tk.StringVar()
-        self.ihm["check_continuous_training"] = tk.Checkbutton(
-            self.latRight, variable=self.ihm["string_continuous_training"], text='Continuous training', 
-            onvalue='yes', offvalue='no', anchor='sw', command=self.swap_continuous_training
-        )
-        # self.ihm["check_continuous_training"].pack(side=tk.LEFT)
-        self.ihm["check_continuous_training"].grid(row=next(self.latRightRowCount), column=0)
-        self.ihm["check_continuous_training"].deselect()
+        def place_button_is_learning():
+            # button to switch to is_learning mode
+            # no regular history training
+            self.ihm["string_is_learning"] = tk.StringVar()
+            self.ihm["check_is_learning"] = tk.Checkbutton(
+                self.latRight, variable=self.ihm["string_is_learning"], text='Learning',
+                onvalue='yes', offvalue='no', anchor='sw', command=self.swap_is_learning
+            )
+            # self.ihm["check_is_learning"].pack(side=tk.LEFT)
+            self.ihm["check_is_learning"].grid(row=next(self.latRightRowCount), column=0)
+            self.ihm["check_is_learning"].select()
 
+
+        def place_button_continuous_training():
+            # allows to restart the simulation every few times
+            self.ihm["string_continuous_training"] = tk.StringVar()
+            self.ihm["check_continuous_training"] = tk.Checkbutton(
+                self.latRight, variable=self.ihm["string_continuous_training"], text='Continuous training',
+                onvalue='yes', offvalue='no', anchor='sw', command=self.swap_continuous_training
+            )
+            # self.ihm["check_continuous_training"].pack(side=tk.LEFT)
+            self.ihm["check_continuous_training"].grid(row=next(self.latRightRowCount), column=0)
+            self.ihm["check_continuous_training"].deselect()
+
+        def place_exploration_rate():
+            self.ihm["label_exploration_rate"] = tk.Label(self.latRight,
+                text="Exploration", font="Ubuntu 12")
+            self.ihm["label_exploration_rate"].grid(row=next(self.latRightRowCount), column=0)#, pady=(35,5))
+
+            self.ihm["exploration"] = tk.Scale(
+                self.latRight, orient="horizontal",
+                from_=0, to=1, resolution=0.01,
+                tickinterval=1, length=100
+                )
+            self.ihm["exploration"].set(1)
+            # self.ihm["exploration"].pack()
+            self.ihm["exploration"].grid(row=next(self.latRightRowCount), column=0)
+
+        # place elements
+        place_title()
+        place_button_training_mode()
+        place_button_is_learning()
+        place_button_continuous_training()
         # self.place_switch_session()
-        self.place_exploration_rate()
+        place_exploration_rate()
 
 
     def place_switch_session(self):
@@ -248,14 +286,14 @@ class MapMenuStruct():
         self.ihm["quitter"].grid(row=next(self.latRightRowCount), column=0, pady=(20,10)) # 410
 
 
-    def expand_map(self):
+    def hide_map(self):
         self.training_mode = True
         self.sleep_time = MIN_SLEEP
         # remove display interface
         # self.ihm["carte"].pack_forget()
         self.ihm["carte"].grid_forget()
 
-    def hide_map(self):
+    def expand_map(self):
         self.training_mode = False
         # self.sleep_time = 1 / self.ihm["vitesse"].get()
         self.sleep_time = 1 / (10 ** self.ihm["vitesse"].get())
@@ -266,10 +304,16 @@ class MapMenuStruct():
 
     def swap_training_mode(self):
         if self.ihm["string_training_mode"].get() == "yes":
-            self.expand_map()
-        elif self.ihm["string_training_mode"].get() == "no":
             self.hide_map()
+        elif self.ihm["string_training_mode"].get() == "no":
+            self.expand_map()
 
+
+    def swap_is_learning(self):
+        if self.ihm["string_is_learning"].get() == "yes":
+            self.is_learning = True
+        elif self.ihm["string_is_learning"].get() == "no":
+            self.is_learning = False
 
     def swap_continuous_training(self):
         if self.ihm["string_continuous_training"].get() == "yes":
@@ -278,6 +322,14 @@ class MapMenuStruct():
         elif self.ihm["string_continuous_training"].get() == "no":
             self.continuous_training = False
 
+
+    def place_restart(self):
+        def next_episode():
+            self.episode += 1
+            self.temps = 0
+        self.ihm["restart"] = tk.Button(self.latRight, text="Redémarrer", command=next_episode)
+        # self.ihm["restart"].pack()
+        self.ihm["restart"].grid(row=next(self.latRightRowCount), column=0, pady=(20,0))
 
 
     def quit(self):
@@ -290,6 +342,9 @@ class MapMenuStruct():
             self.ihm["temps"]["text"] = "Temps : "+str(self.temps)
 
             self.ihm["episode"]["text"] = "Episode : "+str(self.episode)
+
+            # simulate computing
+            sleep(random() / 20)
 
             if not self.training_mode:
                 self.sleep_time = 1 / (10 ** self.ihm["vitesse"].get())
@@ -304,5 +359,5 @@ class MapMenuStruct():
 
 
 if __name__ == '__main__':
-    mms = MapMenuStruct()
+    mms = MapMenuStruct(400, 400)
     mms.launch()

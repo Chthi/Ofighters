@@ -198,6 +198,7 @@ class Circle(Forme):
 
 
     def binary_draw(self, grid):
+        # print(self.x, self.y, self.radius, grid.shape)
         rr, cc = draw.circle(self.x, self.y, radius=self.radius, shape=grid.shape)
         grid[rr, cc] = 1
         return grid

@@ -43,6 +43,7 @@ import matplotlib.cm as cm
 
 # the potential player in included in random bots
 SHIPS_MAP = {"random" : 6, "QlearnIA" : 1}
+# SHIPS_MAP = {"random" : 6}
 
 MAP_PRECISION = 4
 
@@ -54,6 +55,7 @@ RECORD_FOLDER = "ofighter_records"
 DISPLAY_LOSSES = True
 DISPLAY_SCORES = True
 DISPLAY_EPSILONS = True
+DISPLAY_ACTIONS_MAP = True
 
 def now():
     return datetime.datetime.now().strftime("%y-%m-%d-%H-%M-%S")
@@ -72,6 +74,7 @@ def now():
 
 
 class Ofighters(MapMenuStruct):
+    """Main program and controller"""
     fps_manager = fps_manager()
 
     def __init__(self, largeur=DEFAULT_WIDTH, hauteur=DEFAULT_HEIGHT):
@@ -83,6 +86,10 @@ class Ofighters(MapMenuStruct):
         self.recording = False
         # self.training_mode = False
         self.record = None
+        # when true the game will be restarted and passed
+        # to the next episode as soon as possible
+        # and then passed to false
+        self.need_restart = False
         # contains all the objects we will need to delete
         self.todelete = {}
 
@@ -119,12 +126,17 @@ class Ofighters(MapMenuStruct):
         # fill the main window
         self.create_main_window()
 
+        # self.create_widgets()
+        self.transfer_player_ship()
+        self.player_ship = True
+
         # linking Ofighters functions to the main graphical structure
         self.link_functionnalities()
 
-        # self.create_widgets()
-        self.player_ship = True
-        self.transfer_player_ship()
+        # def hide():
+        #     self.ihm["check_training_mode"].select()
+        #     self.swap_training_mode()
+        # self.master.after(1000, hide)
 
         print("Main thread : ", threading.current_thread().ident)
         # other windows
@@ -143,6 +155,10 @@ class Ofighters(MapMenuStruct):
         # epsilons (exploration rate) graphic window
         if DISPLAY_EPSILONS:
             self.init_epsilons_graph()
+
+        # actions and pointer map graphic window
+        if DISPLAY_ACTIONS_MAP:
+            self.init_actions_map()
 
         # run the main thread/loop
         print("mainloop")
@@ -181,10 +197,20 @@ class Ofighters(MapMenuStruct):
         self.ax_epsilons.set_xlabel('Episodes')
         self.ax_epsilons.set_ylabel('Epsilon (exploration rate)')
         self.len_epsilons = 1
-        # plt.tight_layout()
+        plt.tight_layout()
         self.master.after(1000, self.animate_epsilon)
         self.master.after(0, self.fig_epsilons.show)
         print("showed epsilons")
+
+    def init_actions_map(self):
+        self.fig_actions_map = plt.figure(figsize=(10, 5))
+        self.ax_actions_map = self.fig_actions_map.subplots(nrows=1, ncols=2)
+        # plt.tight_layout()
+        self.colorbar_ptr = None
+        self.colorbar_act = None
+        self.master.after(1000, self.animate_actions_map)
+        self.master.after(0, self.fig_actions_map.show)
+        print("showed actions_map")
 
     def restart(self):
         print("restart")
@@ -205,8 +231,11 @@ class Ofighters(MapMenuStruct):
         # not used anymore as the ships objects are not deleted and the player stays in the ship until destroyed
         # if self.ihm["string_transfer_player"].get() == "yes" and self.ihm["string_training_mode"].get() == "no":
         #     self.transfer_player_ship()
-        self.animate_score()
-        self.animate_epsilon()
+        if DISPLAY_SCORES:
+            self.animate_score()
+        if DISPLAY_EPSILONS:
+            self.animate_epsilon()
+        self.need_restart = False
         self.temps = 0
         self.episode += 1
 
@@ -247,7 +276,16 @@ class Ofighters(MapMenuStruct):
         # self.ihm["switch_session"].configure(command=self.create_switch_session)
         if "exploration" in self.ihm:
             self.ihm["exploration"].configure(command=self.actualise_exploration)
-    
+        if "restart" in self.ihm:
+            self.ihm["restart"].configure(command=self.request_restart)
+
+        self.ihm["vitesse"].set(3)
+        self.ihm["check_continuous_training"].select()
+        self.swap_continuous_training()
+
+
+    def request_restart(self):
+        self.need_restart = True
 
     def create_switch_session(self):
         Alert("New session", "Create", callback=lambda x : self.switch_session(x))
@@ -355,13 +393,23 @@ class Ofighters(MapMenuStruct):
             if self.ihm["string_transfer_player"].get() == "yes":
                 # the player do not need to play while the training mode is on
                 self.untransfer_player_ship()
-            self.expand_map()
-        elif self.ihm["string_training_mode"].get() == "no":
             self.hide_map()
+        elif self.ihm["string_training_mode"].get() == "no":
+            self.expand_map()
             if self.ihm["string_transfer_player"].get() == "yes":
                 # replace the player on the map if it was before
                 self.transfer_player_ship()
 
+    def swap_is_learning(self):
+        sb = self._super_bot_one is not None and hasattr(self._super_bot_one.agent, "is_learning")
+        if self.ihm["string_is_learning"].get() == "yes":
+            self.is_learning = True
+            if sb :
+                self._super_bot_one.agent.is_learning = True
+        elif self.ihm["string_is_learning"].get() == "no":
+            self.is_learning = False
+            if sb :
+                self._super_bot_one.agent.is_learning = False
 
     def analyse_records(self):
         # depreciated
@@ -419,7 +467,7 @@ class Ofighters(MapMenuStruct):
 
     def actualise_exploration(self, value):
         # All bots share the same trainer so we only apply on one
-        if hasattr(self._super_bot_one.agent, "trainer") and hasattr(self._super_bot_one.agent.trainer, "epsilon"):
+        if self._super_bot_one and hasattr(self._super_bot_one.agent, "trainer") and hasattr(self._super_bot_one.agent.trainer, "epsilon"):
             self._super_bot_one.agent.trainer.epsilon = float(value)
 
 
@@ -476,6 +524,8 @@ class Ofighters(MapMenuStruct):
 
     def actualise_lasers(self):
         for i, laser in enumerate(self.battleground.lasers):
+            # print("type(laser.body.x)", type(laser.body.x))
+            assert type(laser.body.x) in [int, float, np.float64]
             if laser.state == "destroyed":
                 # explosion animation
                 self.todelete["lasers"].append((self.images.lasers[i], self.battleground.lasers[i]))
@@ -516,20 +566,16 @@ class Ofighters(MapMenuStruct):
             # sleep time goes from 2s to 1ms (0.5 fps to 1000fps)
             self.sleep_time = 1 / (10 ** self.ihm["vitesse"].get())
 
-        if hasattr(self._super_bot_one.agent, "trainer") and \
+        if self._super_bot_one and hasattr(self._super_bot_one.agent, "trainer") and \
                 hasattr(self._super_bot_one.agent.trainer, "epsilon") and \
                 "exploration" in self.ihm:
             self.ihm["exploration"].set(self._super_bot_one.agent.trainer.epsilon)
             # print("DECAY TO ", self._super_bot_one.agent.trainer.epsilon)
 
-        # All bots share the same trainer so we only apply on one
-        # if hasattr(self._super_bot_one.agent, "losses"):
-        #     self.animate_loss(self._super_bot_one.agent.losses)
-
         # if self.fps_manager.active:
         #     self.ihm["fps"]["text"] = "FPS " + str(self.fps_manager.fps)
 
-        if self.continuous_training and self.temps > MAX_TIME:
+        if self.need_restart or self.continuous_training and self.temps > MAX_TIME:
             self.restart()
         else:
             # TODO must be first no ?
@@ -572,19 +618,22 @@ class Ofighters(MapMenuStruct):
 
     def animate_loss(self):
         # All bots share the same trainer so we only apply on one
-        if hasattr(self._super_bot_one.agent, "losses") and self.len_losses != len(self._super_bot_one.agent.losses):
+        if self._super_bot_one and hasattr(self._super_bot_one.agent, "losses") and self.len_losses != len(self._super_bot_one.agent.losses):
             # print("animating in thread : ", threading.current_thread().ident)
             losses = self._super_bot_one.agent.losses
             self.len_losses = len(losses)
             self.ax_losses.cla()
             print("losses", losses)
 
-            # x = range(len(losses))
             self.ax_losses.plot(losses, label='Loss', linewidth=1.5)
-            if len(losses) > 10:
+            window_len = 11
+            half_window_len = (window_len-1)//2
+            if len(losses) >= window_len :
                 # 'full', 'same', 'valid'
-                losses_10 = np.convolve(np.array(losses), np.ones((10,))/10, mode='same')
-                self.ax_losses.plot(losses_10, label='Loss on a 10 steps window')
+                losses_10 = np.convolve(np.array(losses), np.ones((window_len,))/window_len, mode='valid')
+                # valid convolution loose border so we re-center
+                x = range(half_window_len, half_window_len + len(losses_10))
+                self.ax_losses.plot(x, losses_10, label='Loss on a {0} steps window'.format(window_len))
             self.ax_losses.legend(loc='upper left')
             plt.pause(0.5)
 
@@ -601,19 +650,22 @@ class Ofighters(MapMenuStruct):
 
     def animate_score(self):
         # All bots share the same trainer so we only apply on one
-        if hasattr(self._super_bot_one.agent, "scores") and self.len_scores != len(self._super_bot_one.agent.scores):
+        if self._super_bot_one and hasattr(self._super_bot_one.agent, "scores") and self.len_scores != len(self._super_bot_one.agent.scores):
             # print("animating in thread : ", threading.current_thread().ident)
             scores = self._super_bot_one.agent.scores
             self.len_scores = len(scores)
             self.ax_scores.cla()
             print("scores", scores)
 
-            # x = range(len(scores))
             self.ax_scores.plot(scores, label='Score', linewidth=1.5)
-            if len(scores) > 10:
+            window_len = 11
+            half_window_len = (window_len-1)//2
+            if len(scores) >= window_len :
                 # 'full', 'same', 'valid'
-                scores_10 = np.convolve(np.array(scores), np.ones((10,))/10, mode='same')
-                self.ax_scores.plot(scores_10, label='Score on a 10 steps window', color="green")
+                scores_10 = np.convolve(np.array(scores), np.ones((window_len,))/window_len, mode='valid')
+                # valid convolution loose border so we re-center
+                x = range(half_window_len, half_window_len + len(scores_10))
+                self.ax_scores.plot(x, scores_10, label='Score on a {0} steps window'.format(window_len), color="green")
             self.ax_scores.legend(loc='upper left')
             plt.pause(0.5)
         # called at each restart instead
@@ -622,7 +674,7 @@ class Ofighters(MapMenuStruct):
 
     def animate_epsilon(self):
         # All bots share the same trainer so we only apply on one
-        if hasattr(self._super_bot_one.agent, "epsilons") and self.len_epsilons != len(self._super_bot_one.agent.epsilons):
+        if self._super_bot_one and hasattr(self._super_bot_one.agent, "epsilons") and self.len_epsilons != len(self._super_bot_one.agent.epsilons):
             # print("animating in thread : ", threading.current_thread().ident)
             epsilons = self._super_bot_one.agent.epsilons
             self.len_epsilons = len(epsilons)
@@ -631,7 +683,7 @@ class Ofighters(MapMenuStruct):
 
             # x = range(len(epsilons))
             self.ax_epsilons.plot(epsilons, label='Epsilon', linewidth=1.5) # color="magenta"
-            self.ax_epsilons.set_ylim(0, 1.05)
+            self.ax_epsilons.set_ylim(-0.1, 1.05)
             # if len(epsilons) > 10:
                 # 'full', 'same', 'valid'
                 # epsilons_10 = np.convolve(np.array(epsilons), np.ones((10,))/10, mode='same')
@@ -640,6 +692,49 @@ class Ofighters(MapMenuStruct):
             plt.pause(0.5)
         # called at each restart instead
         # self.master.after(500, self.animate_epsilon)
+
+
+    def animate_actions_map(self):
+        # All bots share the same trainer so we only apply on one
+        if self._super_bot_one and hasattr(self._super_bot_one.agent, "trainer") and hasattr(self._super_bot_one.agent.trainer, "ptr_values")\
+                and self._super_bot_one.agent.trainer.ptr_values is not None and self._super_bot_one.agent.trainer.act_values is not None:
+            # TODO if different
+            # print("animating in thread : ", threading.current_thread().ident)
+            ptr_values = self._super_bot_one.agent.trainer.ptr_values
+            act_values = self._super_bot_one.agent.trainer.act_values
+            iaction =  np.argmax(act_values)
+            act_values = np.expand_dims(act_values, axis=1)
+            ipointer = np.unravel_index(np.argmax(ptr_values, axis=None), ptr_values.shape[0:2], order='F')
+
+            print("--- ACTUALISATION ---")
+            print("prediction", act_values)
+            print("ptr_values", ptr_values.shape)
+            ACTION = ["shoot", "thrust", "turn"]
+            print("action", ACTION[iaction])
+            print("pointer", ipointer)
+
+            self.ax_actions_map[0].cla()
+            self.ax_actions_map[1].cla()
+            self.img_ptr = self.ax_actions_map[0].imshow(ptr_values, cmap='coolwarm', interpolation='none', origin='upper') # vmin=-8, vmax=8
+            self.ax_actions_map[0].plot(ipointer[0], ipointer[1], marker='x', markersize=10, markerfacecolor='r', markeredgecolor='black')
+            self.img_act = self.ax_actions_map[1].imshow(act_values, cmap='OrRd', interpolation='none', origin='upper')#extent=[-1,1,-1,1], aspect=4)
+            # self.ax_actions_map[0].axis('off')
+            self.ax_actions_map[1].axis('off')
+
+            if not self.colorbar_ptr:
+                self.colorbar_ptr = self.fig_actions_map.colorbar(self.img_ptr, ax=self.ax_actions_map[0], extend='both')
+                self.colorbar_act = self.fig_actions_map.colorbar(self.img_act, ax=self.ax_actions_map[1], extend='both')
+            else:
+                self.img_ptr.set_clim(vmin=ptr_values.min(),vmax=ptr_values.max())
+                self.img_act.set_clim(vmin=act_values.min(),vmax=act_values.max())
+                # self.colorbar_ptr.set_ticks(np.linspace(0., 2., num=11, endpoint=True))
+                # self.colorbar_ptr.draw_all()
+
+            # self.ax_actions_map.legend(loc='upper left')
+            plt.pause(0.9)
+        # TODO called at each frame instead ?
+        self.master.after(100, self.animate_actions_map)
+
 
 
     def run(self):

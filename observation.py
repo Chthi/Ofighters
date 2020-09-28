@@ -67,6 +67,19 @@ class Observation():
         self.btlgA = False
         self.shipA = False
 
+        # battleground related infos
+        self.battleground = None
+        self.dim = None
+        self.ship_map = None
+        self.laser_map = None
+
+        # ship related infos
+        self.reward = None
+        self.can_shoot = None
+        self.pointing = None
+        self.pos = None
+        self.done = None
+
         battleground = kwargs.get('battleground')
         ship = kwargs.get('ship')
 
@@ -77,6 +90,7 @@ class Observation():
 
 
     def analyse_battleground(self, battleground):
+        self.battleground = battleground
         self.dim = battleground.dim
 
         self.ship_map = np.zeros((self.dim.x, self.dim.y))
@@ -126,6 +140,16 @@ class Observation():
         # print("expected size\n", Observation.size)
         self.vector = vector
         return vector
+
+
+    def toNumpy(self):
+        if not self.btlgA:
+            raise Exception("You must execute analyse_battleground first.")
+        if not self.shipA:
+            raise Exception("You must execute analyse_ship first.")
+
+
+
 
 
     def fromVector(self, vector):

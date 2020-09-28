@@ -104,7 +104,7 @@ class Ship():
 
 
     def reset(self, x=None, y=None):
-        print("SHIP RESET")
+        # print("ship reset")
         # print(self.agent)
         self.agent.reset()
 
@@ -281,6 +281,7 @@ class Ship():
         elif isinstance(action, Action):
             if action.pointing:
                 self.pointing = action.pointing
+                # print("action.pointing", action.pointing)
         # print("turn ", self.direction)
 
         if action.thrust:

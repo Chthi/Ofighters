@@ -30,6 +30,7 @@ class Action():
 
     # constant size of an action vector
     size = 4
+    shape = (4, 1)
 
     def __init__(self, shoot=False, thrust=False, pointing=None, vector=None):
         """
@@ -53,26 +54,28 @@ class Action():
     def toVector(self):
         vector = np.zeros((Action.size, 1), dtype=int)
         # value 1 means shoot = True
-        vector[0] = int(self.shoot)
+        vector[0][0] = int(self.shoot)
         # value 1 means thrust = True
-        vector[1] = int(self.thrust)
+        vector[1][0] = int(self.thrust)
         # position of the cell we are pointing
-        vector[2] = self.pointing.x
-        vector[3] = self.pointing.y
+        vector[2][0] = self.pointing.x
+        vector[3][0] = self.pointing.y
         # squeeze will put it horizontally
         # when using my "from scratch" network I used it vertically for convenience of readability
         self.vector = vector.squeeze()
+        # TODO verify shape and all
         return vector
 
 
     def fromVector(self, vector):
-        # print(vector)
-        if vector.size != Action.size:
-            raise Exception("Invalid vector : expected size {} but got size {}.".format(Action.size, vector.size))
+        # print("vector", vector)
+        # if vector.size != Action.size:
+        if vector.shape != Action.shape:
+            raise Exception("Invalid vector : expected shape {} but got shape {}.".format(Action.shape, vector.shape))
 
-        self.shoot = bool(vector[0])
-        self.thrust = bool(vector[1])
-        self.pointing = Point(vector[2], vector[3])
+        self.shoot = bool(vector[0][0])
+        self.thrust = bool(vector[1][0])
+        self.pointing = Point(vector[2][0], vector[3][0])
 
 
     def possible_actions(self):
@@ -82,7 +85,7 @@ class Action():
 
 
     def __str__(self):
-        return "Action({0})".format(str(list(self.vector)))
+        return "Action({0})".format(str(self.vector))
 
     def __repr__(self):
-        return "Action({0})".format(str(list(self.vector)))
+        return "Action({0})".format(str(self.vector))
