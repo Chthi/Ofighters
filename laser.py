@@ -20,11 +20,7 @@ import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 
 from couple import Point
-
-REWARDS = {
-    "death" : -8,
-    "kill" : 1,
-}
+from qlearnIA_V2 import REWARDS
 
 LIGHT_SPEED = 1 # proportionally change the speed of lasers
 

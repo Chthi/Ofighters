@@ -7,7 +7,6 @@ from copy import copy, deepcopy
 from time import sleep, time
 import tkinter as tk
 import numpy as np
-import datetime
 import pickle
 import json
 import glob
@@ -22,7 +21,9 @@ from player import Player
 from battleground import Battleground
 from laser import Laser
 from action import Action
+from utils import now, debug
 from observation import Observation, DEFAULT_WIDTH, DEFAULT_HEIGHT
+
 # from brAIn import NETWORKS_FOLDER, BrAIn, SimpleModel
 NETWORKS_FOLDER = "ofighter_networks"
 
@@ -40,9 +41,11 @@ else :
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 
+# from memory_usage import measure_size
 
 # the potential player in included in random bots
-SHIPS_MAP = {"random" : 6, "QlearnIA" : 1}
+SHIPS_MAP = {"idle" : 6, "QlearnIA" : 1}
+# SHIPS_MAP = {"random" : 6, "QlearnIA" : 1}
 # SHIPS_MAP = {"random" : 6}
 
 MAP_PRECISION = 4
@@ -56,10 +59,6 @@ DISPLAY_LOSSES = True
 DISPLAY_SCORES = True
 DISPLAY_EPSILONS = True
 DISPLAY_ACTIONS_MAP = True
-
-def now():
-    return datetime.datetime.now().strftime("%y-%m-%d-%H-%M-%S")
-
 
 
 # coordinates conventions
@@ -108,15 +107,16 @@ class Ofighters(MapMenuStruct):
 
         self.switch_session("default")
 
-        Images = namedtuple("Images", ['ships', 'lasers', ])
+        Images = namedtuple("Images", ['ships', 'lasers', 'targets', ])
         ships_images_list = len(self.battleground.ships) * [None]
-        self.images = Images(ships_images_list, [], )
+        targets_images_list = len(self.battleground.ships) * [None]
+        self.images = Images(ships_images_list, [], targets_images_list, )
 
         # images contains tkinter graphical objects
         # lasers contains (index, object) indexes of ships images
         # and corresponding object in the battleground
         # lasers contains indexes of ships images
-        self.todelete = {"images" : [], "lasers" : [], "ships" : []}
+        self.todelete = {"images" : [], "lasers" : [], "ships" : [], "targets" : []}
 
         self.threads = {}
 
@@ -247,7 +247,12 @@ class Ofighters(MapMenuStruct):
             self.ihm["carte"].delete(self.images.lasers[0])
             del self.images.lasers[0]
         self.battleground.lasers = []
-        
+
+        # remove image of the targets
+        for i, target_images in enumerate(self.images.targets):
+            self.ihm["carte"].delete(target_images)
+            self.images.targets[i] = None
+
         # remove image and image reference of ships
         # but not the corresponding object from the battleground
         # they are kept as wreckage and repaired each game/restart/episode
@@ -467,8 +472,9 @@ class Ofighters(MapMenuStruct):
 
     def actualise_exploration(self, value):
         # All bots share the same trainer so we only apply on one
+        print("actualising exploration to ", value)
         if self._super_bot_one and hasattr(self._super_bot_one.agent, "trainer") and hasattr(self._super_bot_one.agent.trainer, "epsilon"):
-            self._super_bot_one.agent.trainer.epsilon = float(value)
+            self._super_bot_one.agent.trainer.epsilon.set(float(value))
 
 
     def assign_ship_image(self, i, ship):
@@ -479,13 +485,37 @@ class Ofighters(MapMenuStruct):
                 fill=ship.color, outline="Black", width="1"
             )
 
+    def assign_target_image(self, i, ship):
+        # we create image for new target associated to a ship
+        size = 4
+        # TODO crash if lines out of bounds ?
+        self.images.targets[i] = self.ihm["carte"].create_line(
+                ship.pointing.x - size, ship.pointing.y - size,
+                ship.pointing.x + size, ship.pointing.y + size,
+                ship.pointing.x - size, ship.pointing.y + size,
+                ship.pointing.x + size, ship.pointing.y - size,
+                fill="red",
+                width="1"
+            ) # fill=target.color
+
     def move_ship_image(self, i, ship):
         # print("state", ship.state)
-        # and move already existing image of existing ships
+        # move already existing image of existing ships
         self.ihm["carte"].coords(
             self.images.ships[i],
             ship.body.x - ship.body.radius, ship.body.y - ship.body.radius,
             ship.body.x + ship.body.radius, ship.body.y + ship.body.radius
+        )
+
+    def move_target_image(self, i, ship):
+        # move already existing image of existing ship targets
+        size = 4
+        self.ihm["carte"].coords(
+            self.images.targets[i],
+            ship.pointing.x - size, ship.pointing.y - size,
+            ship.pointing.x + size, ship.pointing.y + size,
+            ship.pointing.x - size, ship.pointing.y + size,
+            ship.pointing.x + size, ship.pointing.y - size,
         )
 
     def destroy_ship_image(self, i, ship):
@@ -493,6 +523,9 @@ class Ofighters(MapMenuStruct):
         self.todelete["ships"].append((self.images.ships[i], self.battleground.ships[i]))
         self.images.ships[i] = None
 
+    def destroy_target_image(self, i, ship):
+        self.todelete["targets"].append(self.images.targets[i])
+        self.images.targets[i] = None
 
     def actualise_ships(self):
         for i, ship in enumerate(self.battleground.ships):
@@ -509,6 +542,9 @@ class Ofighters(MapMenuStruct):
             elif ship.state == "destroyed":
                 # remove image
                 self.destroy_ship_image(i, ship)
+                # display the targeted area for the bot
+                if ship.agent.behavior == "QlearnIA":
+                    self.destroy_target_image(i, ship)
                 ship.state = "wreckage"
                 if ship.player and "check_transfer_player" in self.ihm :
                     self.ihm["check_transfer_player"].deselect()
@@ -517,9 +553,15 @@ class Ofighters(MapMenuStruct):
             elif self.temps >= 1 and ship.time == 0:
                 # create image
                 self.assign_ship_image(i, ship)
+                # display the targeted area for the bot
+                if ship.agent.behavior == "QlearnIA":
+                    self.assign_target_image(i, ship)
             else:
                 # move image
                 self.move_ship_image(i, ship)
+                # display the targeted area for the bot
+                if ship.agent.behavior == "QlearnIA":
+                    self.move_target_image(i, ship)
 
 
     def actualise_lasers(self):
@@ -559,6 +601,7 @@ class Ofighters(MapMenuStruct):
 
         self.actualise_ships()
         self.actualise_lasers()
+        # self.actualise_targets()
         # print("{} - {}".format(len(self.battleground.lasers), len(self.images.lasers)))
         self.clear_wreckage()
 
@@ -569,8 +612,8 @@ class Ofighters(MapMenuStruct):
         if self._super_bot_one and hasattr(self._super_bot_one.agent, "trainer") and \
                 hasattr(self._super_bot_one.agent.trainer, "epsilon") and \
                 "exploration" in self.ihm:
-            self.ihm["exploration"].set(self._super_bot_one.agent.trainer.epsilon)
-            # print("DECAY TO ", self._super_bot_one.agent.trainer.epsilon)
+            self.ihm["exploration"].setvar("exploration_value", self._super_bot_one.agent.trainer.epsilon.get())
+            # print("DECAY TO ", self._super_bot_one.agent.trainer.epsilon.get())
 
         # if self.fps_manager.active:
         #     self.ihm["fps"]["text"] = "FPS " + str(self.fps_manager.fps)
@@ -580,6 +623,8 @@ class Ofighters(MapMenuStruct):
         else:
             # TODO must be first no ?
             self.battleground.frame()
+
+        # print(measure_size)
 
         if self.quitter:
             self.master.quit()
@@ -603,7 +648,12 @@ class Ofighters(MapMenuStruct):
             self.ihm["carte"].delete(image)
             # self.images.ships.remove(image)
             # self.battleground.ships.remove(obj)
-        
+
+        # remove image, reference to the target
+        for image in self.todelete["targets"]:
+            self.ihm["carte"].delete(image)
+            # self.images.targets.remove(image)
+
         # the work is done
         for key, value in self.todelete.items():
             self.todelete[key] = []
@@ -623,7 +673,7 @@ class Ofighters(MapMenuStruct):
             losses = self._super_bot_one.agent.losses
             self.len_losses = len(losses)
             self.ax_losses.cla()
-            print("losses", losses)
+            # print("losses", losses)
 
             self.ax_losses.plot(losses, label='Loss', linewidth=1.5)
             window_len = 11
@@ -655,7 +705,7 @@ class Ofighters(MapMenuStruct):
             scores = self._super_bot_one.agent.scores
             self.len_scores = len(scores)
             self.ax_scores.cla()
-            print("scores", scores)
+            # print("scores", scores)
 
             self.ax_scores.plot(scores, label='Score', linewidth=1.5)
             window_len = 11
@@ -679,7 +729,7 @@ class Ofighters(MapMenuStruct):
             epsilons = self._super_bot_one.agent.epsilons
             self.len_epsilons = len(epsilons)
             self.ax_epsilons.cla()
-            print("epsilons", epsilons)
+            # print("epsilons", epsilons)
 
             # x = range(len(epsilons))
             self.ax_epsilons.plot(epsilons, label='Epsilon', linewidth=1.5) # color="magenta"
@@ -707,11 +757,11 @@ class Ofighters(MapMenuStruct):
             ipointer = np.unravel_index(np.argmax(ptr_values, axis=None), ptr_values.shape[0:2], order='F')
 
             print("--- ACTUALISATION ---")
-            print("prediction", act_values)
-            print("ptr_values", ptr_values.shape)
+            # print("prediction", act_values)
+            # print("ptr_values", ptr_values.shape)
             ACTION = ["shoot", "thrust", "turn"]
             print("action", ACTION[iaction])
-            print("pointer", ipointer)
+            # print("pointer", ipointer)
 
             self.ax_actions_map[0].cla()
             self.ax_actions_map[1].cla()

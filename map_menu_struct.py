@@ -254,12 +254,16 @@ class MapMenuStruct():
                 text="Exploration", font="Ubuntu 12")
             self.ihm["label_exploration_rate"].grid(row=next(self.latRightRowCount), column=0)#, pady=(35,5))
 
+            # we set a value linked to the scale so we can set the value without triggering the callback command
+            exploration_value = tk.DoubleVar(self.master, name="exploration_value")
             self.ihm["exploration"] = tk.Scale(
                 self.latRight, orient="horizontal",
                 from_=0, to=1, resolution=0.01,
-                tickinterval=1, length=100
+                tickinterval=1, length=100,
+                variable=exploration_value
                 )
             self.ihm["exploration"].set(1)
+            # print(self.ihm["exploration"].getvar(name="exploration_value"))
             # self.ihm["exploration"].pack()
             self.ihm["exploration"].grid(row=next(self.latRightRowCount), column=0)
 

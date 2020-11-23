@@ -7,7 +7,7 @@ import math
 from random import randint, random, choice
 from math import sqrt, acos
 
-from form import Circle
+from form import Circle, sum_angles
 from couple import Point
 
 from map_menu_struct import *
@@ -26,9 +26,12 @@ from laser import Laser
 from observation import DEFAULT_WIDTH, DEFAULT_HEIGHT
 from action import Action
 from one_hot_action import ActionOneHot
+
 from agent import Agent
+
 # from brAIn import BrAIn
-from qlearnIA import QlearnIA
+# from qlearnIA import QlearnIA
+from qlearnIA_V2 import QlearnIA, REWARDS
 
 SHIPS_SPEED = 8
 PLAYER_FOLLOWS_NETWORK_RULES = True
@@ -36,11 +39,6 @@ NETWORK = True
 LEROY_RATE = 0.0
 # LEROY_RATE = 0.01
 
-
-REWARDS = {
-    "death" : -8,
-    "kill" : 1,
-}
 
 
 class Ship():
@@ -125,6 +123,9 @@ class Ship():
     def is_super_bot(self):
         return self.agent.behavior in ["network", "QlearnIA"]
 
+    def is_me(self, ship):
+        return self.id == ship.id
+
     def assign_player(self, player):
         self.player = player
         self.color = "Grey"
@@ -159,6 +160,66 @@ class Ship():
                 laser.fired = Point(self.body.x, self.body.y)
 
             self.battleground.lasers.append(laser)
+
+            if self.any_enemy_aimed(self.pointing):
+                self.agent.reward += REWARDS["aim"]
+
+            if self.any_enemy_on_trajectory(self.pointing):
+                self.agent.reward += REWARDS["trajectory"]
+
+    def any_enemy_aimed(self, pointing):
+        found = False
+        for ship in self.battleground.ships:
+            found = found or not self.is_me(ship) and ship.is_playable() and self.enemy_aimed(pointing, ship)
+        if found :
+            print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> AIMED <<<<<")
+        return found
+
+    def enemy_aimed(self, pointing, ship):
+        # calcluer la ligne pas juste le ciblage
+        # score plus élevé si ciblé
+        return ship.body.distance(pointing) <= ship.body.radius
+
+    def any_enemy_on_trajectory(self, pointing):
+        found = False
+        for ship in self.battleground.ships:
+            found = found or not self.is_me(ship) and ship.is_playable() and self.enemy_on_trajectory(pointing, ship)
+        if found :
+            print("------------------------------------------------------------------------------>>>>>>> TRAJECTORY <<<<<")
+        return found
+
+    def enemy_on_trajectory(self, pointing, ship):
+        # print("pointing", pointing)
+        # print("ship.body", ship.body)
+        # angle of the shoot relative to this ship [-Pi,Pi]
+        # we convert to [0,2Pi]
+        shooting_angle = self.body.angle_with(pointing) + math.pi
+        if not shooting_angle:
+            # print("touch", False)
+            return False
+        # print("shooting_angle", math.degrees(shooting_angle))
+        # relative angle between this ship and the enemy one [-Pi,Pi]
+        # we convert to [0,2Pi]
+        target_angle = self.body.angle_with(ship.body) + math.pi
+        if not target_angle:
+            # print("touch", False)
+            return False
+        # print("target_angle", math.degrees(target_angle))
+        # angular radius of the enemy ship [0,2Pi]
+        # ie. the relative angular size of the target
+        # the biggest and the closest the target is the easiest it is to touch it
+        angular_radius = self.body.angular_radius(ship.body)
+        # print("angular_radius", math.degrees(angular_radius))
+        # 2 angles defining a cone [0,2Pi]
+        # you have to aim inside to touch the target
+        superior_boundary = sum_angles(target_angle, angular_radius)
+        inferior_boundary = sum_angles(target_angle, -angular_radius)
+        # print("superior_boundary", math.degrees(superior_boundary))
+        # print("inferior_boundary", math.degrees(inferior_boundary))
+        # check if the shoot is a touch
+        touch = inferior_boundary <= shooting_angle <= superior_boundary
+        # print("touch", touch)
+        return touch
 
 
     def thrust(self):

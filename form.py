@@ -21,6 +21,15 @@ def rotate(orientation, clockwise=True):
     return orientation
 
 
+def sum_angles(angleA, angleB):
+    """return the sum (radians [0,2Pi]) of two angles (radians [0,2Pi] or [-Pi,Pi])"""
+    # print(math.degrees(angleA))
+    # print(math.degrees(angleB))
+    # print(math.degrees(angleA + angleB))
+    angle = (angleA + angleB) % (2 * math.pi)
+    # print(angle)
+    return angle
+
 
 class Forme:
     """Represent a form with a hitbox."""
@@ -35,8 +44,9 @@ class Forme:
         return math.sqrt((self.x - pos.x)**2 + (self.y - pos.y)**2)
 
 
-    def angle_with(self, point, origin="down_left"):
-        """Return a value in radians between -pi and pi
+    def angle_with_(self, point, origin="down_left"):
+        """Old version
+        Return a value in radians between -pi and pi
         If the 2 points are at the same position return None
         for the moment only work with origin = down_left
         where y increase by going up and x by going right"""
@@ -60,6 +70,18 @@ class Forme:
             else:
                 res = None
         return res
+
+
+    def angle_with(self, point, origin="down_left"):
+        """Return a value in radians between -pi and pi
+        If the 2 points are at the same position return None
+        for the moment only work with origin = down_left
+        where y increase by going up and x by going right"""
+        dx = point.x - self.x
+        dy = point.y - self.y
+        # y then x
+        return math.atan2(dy, dx)
+
 
 
     # def __rsub__(self, other):
@@ -271,6 +293,17 @@ class Circle(Forme):
 
         return grid
 
+    def angular_radius(self, other_circle):
+        """Compute the angular distance (radians) between 2 circles
+        using distance and other circle radius"""
+        if not isinstance(other_circle, Circle):
+            raise Exception("other object must be Circle")
+        dist = self.distance(other_circle)
+        if dist == 0:
+            return 2 * math.pi
+        else:
+            return math.atan(other_circle.radius / dist)
+
 
 
 
@@ -335,7 +368,45 @@ def test_rotate():
     print("{} pi".format(rotate(-math.pi/2, False) / math.pi))
 
 
+def test_angular_radius():
+    # using down left origin
+    origin = Circle(0, 0, 1)
+    c0 = Circle(0, 0, 1)
+    print("{} degrees".format(math.degrees(origin.angular_radius(c0))))
+    c1 = Circle(0, 1, 1)
+    print("{} degrees".format(math.degrees(origin.angular_radius(c1))))
+    c2 = Circle(1, 0, 1)
+    print("{} degrees".format(math.degrees(origin.angular_radius(c2))))
+    c3 = Circle(0, 0.5, 1)
+    print("{} degrees".format(math.degrees(origin.angular_radius(c3))))
+    c4 = Circle(0, 0.01, 1)
+    print("{} degrees".format(math.degrees(origin.angular_radius(c4))))
+    c4 = Circle(0, 1000, 1)
+    print("{} degrees".format(math.degrees(origin.angular_radius(c4))))
+
+
+def test_sum_angles():
+    origin = Circle(0, 0, 1)
+    c1_4 = Circle(1, 1, 1)
+    c1 = Circle(0, 1, 1)
+    # 1/4 pi
+    angle = origin.angle_with(c1_4, origin="down_left")
+    print("{} pi".format(angle / math.pi))
+    angular_radius = origin.angular_radius(c1)
+    print("{} pi".format(angular_radius / math.pi))
+    sum_angles(angle, angular_radius)
+    print("{} pi".format(sum_angles(-math.pi, math.pi) / math.pi))
+    print("{} pi".format(sum_angles(2*math.pi, -math.pi) / math.pi))
+    print("{} pi".format(sum_angles(-math.pi, 2*math.pi) / math.pi))
+    print("{} pi".format(sum_angles(0, 2*math.pi) / math.pi))
+    print("{} pi".format(sum_angles(0, -math.pi) / math.pi))
+    print("{} pi".format(sum_angles(math.pi/2, math.pi/4) / math.pi))
+    print("{} pi".format(sum_angles(math.pi/2, math.pi) / math.pi))
+
+
 if __name__ == '__main__':
     # test_forme()
-    # test_angle_with()
-    test_rotate()
+    test_angle_with()
+    # test_rotate()
+    # test_angular_radius()
+    # test_sum_angles()
