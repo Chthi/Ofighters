@@ -101,6 +101,7 @@ class Battleground():
             self.absolute_state = state
             Observation.loadBattleground(self, state)
         else:
+            # battleground observation from an external view (not in the eyes of one participant)
             self.absolute_state = Observation(battleground=self)
 
 

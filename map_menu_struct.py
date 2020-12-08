@@ -62,7 +62,7 @@ class MapMenuStruct():
 
         # fill the main window
         self.create_main_window()
-        
+
         # other windows
         self.threads = []
         self.threads.append(spawnthread(self.run))

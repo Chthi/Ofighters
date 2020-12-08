@@ -221,7 +221,9 @@ class Circle(Forme):
 
     def binary_draw(self, grid):
         # print(self.x, self.y, self.radius, grid.shape)
-        rr, cc = draw.circle(self.x, self.y, radius=self.radius, shape=grid.shape)
+        # rr, cc = draw.circle(self.x, self.y, radius=self.radius, shape=grid.shape)
+        # x and y are reversed as numpy array first index correspond to y
+        rr, cc = draw.disk((self.y, self.x), radius=self.radius, shape=grid.shape)
         grid[rr, cc] = 1
         return grid
 

@@ -12,6 +12,7 @@ import json
 import glob
 import threading
 from itertools import count
+from statistics import mean, stdev
 
 from record import OfighterRecord
 from thread_manager import spawnthread
@@ -22,13 +23,18 @@ from battleground import Battleground
 from laser import Laser
 from action import Action
 from utils import now, debug
-from observation import Observation, DEFAULT_WIDTH, DEFAULT_HEIGHT
+from observation import DEFAULT_WIDTH, DEFAULT_HEIGHT
+from ship_image import ShipImage
+from epsilon_graph import EpsilonGraph
+from score_graph import ScoreGraph
+from action_map_graph import ActionMapGraph
+from loss_graph import LossGraph
 
 # from brAIn import NETWORKS_FOLDER, BrAIn, SimpleModel
 NETWORKS_FOLDER = "ofighter_networks"
 
 from map_menu_struct import *
-from fps_manager import fps, fps_manager
+# from fps_manager import fps, fps_manager
 
 # from renforcement_learning_neural_network import Renforcement_learning_neural_network
 
@@ -74,7 +80,7 @@ DISPLAY_ACTIONS_MAP = True
 
 class Ofighters(MapMenuStruct):
     """Main program and controller"""
-    fps_manager = fps_manager()
+    # fps_manager = fps_manager()
 
     def __init__(self, largeur=DEFAULT_WIDTH, hauteur=DEFAULT_HEIGHT):
         # we call the basic graphic interface for the game
@@ -92,6 +98,9 @@ class Ofighters(MapMenuStruct):
         # contains all the objects we will need to delete
         self.todelete = {}
 
+        self.frames = deque(maxlen=100)
+        self.start = time()
+
         plt.style.use('fivethirtyeight')
 
         self.battleground = Battleground(ships=SHIPS_MAP, largeur=self.dim.x, hauteur=self.dim.y)
@@ -108,7 +117,8 @@ class Ofighters(MapMenuStruct):
         self.switch_session("default")
 
         Images = namedtuple("Images", ['ships', 'lasers', 'targets', ])
-        ships_images_list = len(self.battleground.ships) * [None]
+        # ships_images_list = len(self.battleground.ships) * ShipImage(self.ihm, self.battleground)
+        ships_images_list = [ShipImage(self.ihm, self.battleground) for _ in self.battleground.ships]
         targets_images_list = len(self.battleground.ships) * [None]
         self.images = Images(ships_images_list, [], targets_images_list, )
 
@@ -146,19 +156,27 @@ class Ofighters(MapMenuStruct):
 
         # losses graphic window
         if DISPLAY_LOSSES:
-            self.init_losses_graph()
+            self.loss_graph = LossGraph(self.master, self._super_bot_one)
+            self.loss_graph.create()
+            # self.init_losses_graph()
 
         # scores graphic window
         if DISPLAY_SCORES:
-            self.init_scores_graph()
+            self.score_graph = ScoreGraph(self.master, self._super_bot_one)
+            self.score_graph.create()
+            # self.init_scores_graph()
 
         # epsilons (exploration rate) graphic window
         if DISPLAY_EPSILONS:
-            self.init_epsilons_graph()
+            self.epsilon_graph = EpsilonGraph(self.master, self._super_bot_one)
+            self.epsilon_graph.create()
+            # self.init_epsilons_graph()
 
         # actions and pointer map graphic window
         if DISPLAY_ACTIONS_MAP:
-            self.init_actions_map()
+            self.action_map_graph = ActionMapGraph(self.master, self._super_bot_one)
+            self.action_map_graph.create()
+            # self.init_actions_map()
 
         # run the main thread/loop
         print("mainloop")
@@ -232,9 +250,13 @@ class Ofighters(MapMenuStruct):
         # if self.ihm["string_transfer_player"].get() == "yes" and self.ihm["string_training_mode"].get() == "no":
         #     self.transfer_player_ship()
         if DISPLAY_SCORES:
-            self.animate_score()
+            if self.ihm["string_training_mode"].get() == "no" and self.score_graph.created:
+                self.score_graph.animate()
+                # self.animate_score()
         if DISPLAY_EPSILONS:
-            self.animate_epsilon()
+            if self.ihm["string_training_mode"].get() == "no" and self.epsilon_graph.created:
+                self.epsilon_graph.animate()
+                # self.animate_epsilon()
         self.need_restart = False
         self.temps = 0
         self.episode += 1
@@ -257,8 +279,9 @@ class Ofighters(MapMenuStruct):
         # but not the corresponding object from the battleground
         # they are kept as wreckage and repaired each game/restart/episode
         for i, ship_image in enumerate(self.images.ships):
-            self.ihm["carte"].delete(ship_image)
-            self.images.ships[i] = None
+            ship_image.destroy_image()
+            # self.ihm["carte"].delete(ship_image)
+            # self.images.ships[i] = None
         
         # reset the list of things to delete
         for key, value in self.todelete.items():
@@ -283,6 +306,10 @@ class Ofighters(MapMenuStruct):
             self.ihm["exploration"].configure(command=self.actualise_exploration)
         if "restart" in self.ihm:
             self.ihm["restart"].configure(command=self.request_restart)
+
+        # link functions to events
+        # when the closing cross is pressed
+        self.master.protocol("WM_DELETE_WINDOW", self.quit)
 
         self.ihm["vitesse"].set(3)
         self.ihm["check_continuous_training"].select()
@@ -321,7 +348,8 @@ class Ofighters(MapMenuStruct):
                 player1 = Player("mouse", self.master, self.ihm["carte"])
                 self.battleground.ships[i].assign_player(player1)
                 if len(self.images.ships) > i:
-                    self.ihm["carte"].itemconfig(self.images.ships[i], fill=self.battleground.ships[i].color)
+                    self.images.ships[i].itemconfig(fill=self.battleground.ships[i].color)
+                    # self.ihm["carte"].itemconfig(self.images.ships[i], fill=self.battleground.ships[i].color)
                 assigned = True
             i += 1
         if not assigned:
@@ -335,7 +363,8 @@ class Ofighters(MapMenuStruct):
                 print("unassign")
                 ship.unassign_player()
                 if len(self.images.ships) > i:
-                    self.ihm["carte"].itemconfig(self.images.ships[i], fill=ship.color)
+                    self.images.ships[i].itemconfig(fill=ship.color)
+                    # self.ihm["carte"].itemconfig(self.images.ships[i], fill=ship.color)
 
 
     def save_ia(self):
@@ -398,12 +427,30 @@ class Ofighters(MapMenuStruct):
             if self.ihm["string_transfer_player"].get() == "yes":
                 # the player do not need to play while the training mode is on
                 self.untransfer_player_ship()
+            if DISPLAY_EPSILONS and self.epsilon_graph.created:
+                self.epsilon_graph.destroy()
+            if DISPLAY_SCORES and self.score_graph.created:
+                self.score_graph.destroy()
+            if DISPLAY_LOSSES and self.loss_graph.created:
+                self.loss_graph.destroy()
+            if DISPLAY_ACTIONS_MAP and self.action_map_graph.created:
+                self.action_map_graph.destroy()
             self.hide_map()
+
         elif self.ihm["string_training_mode"].get() == "no":
             self.expand_map()
             if self.ihm["string_transfer_player"].get() == "yes":
                 # replace the player on the map if it was before
                 self.transfer_player_ship()
+            if DISPLAY_EPSILONS and not self.epsilon_graph.created:
+                self.epsilon_graph.create()
+            if DISPLAY_SCORES and not self.score_graph.created:
+                self.score_graph.create()
+            if DISPLAY_LOSSES and not self.loss_graph.created:
+                self.loss_graph.create()
+            if DISPLAY_ACTIONS_MAP and not self.action_map_graph.created:
+                self.action_map_graph.create()
+
 
     def swap_is_learning(self):
         sb = self._super_bot_one is not None and hasattr(self._super_bot_one.agent, "is_learning")
@@ -477,13 +524,14 @@ class Ofighters(MapMenuStruct):
             self._super_bot_one.agent.trainer.epsilon.set(float(value))
 
 
-    def assign_ship_image(self, i, ship):
+    def assign_ship_image(self, i, ship): # REPLACED
         # we create images for new ships
         self.images.ships[i] = self.ihm["carte"].create_oval(
                 ship.body.x - ship.body.radius, ship.body.y - ship.body.radius,
                 ship.body.x + ship.body.radius, ship.body.y + ship.body.radius,
                 fill=ship.color, outline="Black", width="1"
             )
+
 
     def assign_target_image(self, i, ship):
         # we create image for new target associated to a ship
@@ -498,7 +546,7 @@ class Ofighters(MapMenuStruct):
                 width="1"
             ) # fill=target.color
 
-    def move_ship_image(self, i, ship):
+    def move_ship_image(self, i, ship): # REPLACED
         # print("state", ship.state)
         # move already existing image of existing ships
         self.ihm["carte"].coords(
@@ -518,7 +566,7 @@ class Ofighters(MapMenuStruct):
             ship.pointing.x + size, ship.pointing.y - size,
         )
 
-    def destroy_ship_image(self, i, ship):
+    def destroy_ship_image(self, i, ship): # REPLACED
         # explosion animation
         self.todelete["ships"].append((self.images.ships[i], self.battleground.ships[i]))
         self.images.ships[i] = None
@@ -530,18 +578,20 @@ class Ofighters(MapMenuStruct):
     def actualise_ships(self):
         for i, ship in enumerate(self.battleground.ships):
 
-            if ship.actualise:
-                self.ihm["carte"].itemconfig(self.images.ships[i], fill=self.battleground.ships[i].color)
-
             if self.recording:
                 self.record.saveFrame(self.battleground.actions)
+
+            if ship.actualise:
+                self.images.ships[i].itemconfig(fill=ship.color)
+                # self.ihm["carte"].itemconfig(self.images.ships[i], fill=self.battleground.ships[i].color)
 
             if ship.state == "wreckage":
                 # image removed
                 continue
             elif ship.state == "destroyed":
                 # remove image
-                self.destroy_ship_image(i, ship)
+                self.images.ships[i].destroy_image()
+                # self.destroy_ship_image(i, ship)
                 # display the targeted area for the bot
                 if ship.agent.behavior == "QlearnIA":
                     self.destroy_target_image(i, ship)
@@ -552,13 +602,15 @@ class Ofighters(MapMenuStruct):
                     ship.unassign_player()
             elif self.temps >= 1 and ship.time == 0:
                 # create image
-                self.assign_ship_image(i, ship)
+                self.images.ships[i].assign_image(ship)
+                # self.assign_ship_image(i, ship)
                 # display the targeted area for the bot
                 if ship.agent.behavior == "QlearnIA":
                     self.assign_target_image(i, ship)
             else:
                 # move image
-                self.move_ship_image(i, ship)
+                self.images.ships[i].move_image(ship)
+                # self.move_ship_image(i, ship)
                 # display the targeted area for the bot
                 if ship.agent.behavior == "QlearnIA":
                     self.move_target_image(i, ship)
@@ -589,6 +641,15 @@ class Ofighters(MapMenuStruct):
                 )
 
 
+    def actualise_fps(self):
+        delta = time() - self.start
+        self.frames.append(delta)
+        fps = 1 / mean(self.frames)
+        # TODO running mean
+        self.ihm["fps"]["text"] = "FPS {0:.0f}".format(fps)
+        self.start = time()
+
+
     # TODO not adapted to launch multiple instances of Ofighters
     # musn't use decorators here
     # @fps(fps_manager)
@@ -614,9 +675,11 @@ class Ofighters(MapMenuStruct):
                 "exploration" in self.ihm:
             self.ihm["exploration"].setvar("exploration_value", self._super_bot_one.agent.trainer.epsilon.get())
             # print("DECAY TO ", self._super_bot_one.agent.trainer.epsilon.get())
+            print("position of bot", self._super_bot_one.body.x, self._super_bot_one.body.y)
 
         # if self.fps_manager.active:
         #     self.ihm["fps"]["text"] = "FPS " + str(self.fps_manager.fps)
+        self.actualise_fps()
 
         if self.need_restart or self.continuous_training and self.temps > MAX_TIME:
             self.restart()
@@ -638,14 +701,14 @@ class Ofighters(MapMenuStruct):
 
     def clear_wreckage(self):
         # remove image, reference to the laser and the corresponding object from the battleground
-        for image, obj in self.todelete["lasers"]:
+        for image, obj in self.todelete["lasers"]: # REPLACED
             self.ihm["carte"].delete(image)
             self.images.lasers.remove(image)
             self.battleground.lasers.remove(obj)
 
         # remove image, reference to the ship and the corresponding object from the battleground
-        for image, obj in self.todelete["ships"]:
-            self.ihm["carte"].delete(image)
+        # for image, obj in self.todelete["ships"]:
+        #     self.ihm["carte"].delete(image)
             # self.images.ships.remove(image)
             # self.battleground.ships.remove(obj)
 
@@ -666,6 +729,7 @@ class Ofighters(MapMenuStruct):
             self.save_records(os.path.join(RECORD_FOLDER, "ofighter_record_" + now()))
 
 
+    """
     def animate_loss(self):
         # All bots share the same trainer so we only apply on one
         if self._super_bot_one and hasattr(self._super_bot_one.agent, "losses") and self.len_losses != len(self._super_bot_one.agent.losses):
@@ -743,7 +807,7 @@ class Ofighters(MapMenuStruct):
         # called at each restart instead
         # self.master.after(500, self.animate_epsilon)
 
-
+    
     def animate_actions_map(self):
         # All bots share the same trainer so we only apply on one
         if self._super_bot_one and hasattr(self._super_bot_one.agent, "trainer") and hasattr(self._super_bot_one.agent.trainer, "ptr_values")\
@@ -784,21 +848,13 @@ class Ofighters(MapMenuStruct):
             plt.pause(0.9)
         # TODO called at each frame instead ?
         self.master.after(100, self.animate_actions_map)
-
+        """
 
 
     def run(self):
         self.master.after(0, self.frame)
 
 
-
-
-
-# TODO benchmark desactivate print
-# def blockPrint():
-#     sys.stdout = open(os.devnull, 'w')
-# def enablePrint():
-#     sys.stdout = sys.__stdout__
 
 
 if __name__ == "__main__":

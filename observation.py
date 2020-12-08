@@ -93,9 +93,13 @@ class Observation():
         self.battleground = battleground
         self.dim = battleground.dim
 
+        # TODO check if coords need to be reverses as it is a numpy array and y comes first
+        # could pose problems if the map is a rectangle
+        # or we can try to create them already transposed
         self.ship_map = np.zeros((self.dim.x, self.dim.y))
         for ship in battleground.ships:
-            self.ship_map = ship.body.binary_draw(self.ship_map)
+            if ship.is_playable():
+                self.ship_map = ship.body.binary_draw(self.ship_map)
 
         self.laser_map = np.zeros((self.dim.x, self.dim.y))
         for laser in battleground.lasers:

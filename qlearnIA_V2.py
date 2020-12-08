@@ -37,8 +37,8 @@ NETWORKS_FOLDER = "ofighter_networks"
 
 
 REWARDS = {
-    "death" : -80,
-    "kill" : 10,
+    "death" : 0, # -80
+    "kill" : 0, # 10
     "aim" : 2,
     "trajectory" : 1,
 }
@@ -215,7 +215,7 @@ class Trainer:
         self.ptr_values = ptr_values_0[0].squeeze()
 
         # Pick the action based on the predicted reward
-        iaction =  np.argmax(self.act_values)
+        iaction = np.argmax(self.act_values)
         # print("np.argmax(ptr_values, axis=None)", np.argmax(ptr_values, axis=None))
         ipointer = np.unravel_index(np.argmax(self.ptr_values, axis=None), self.ptr_values.shape[0:2], order='F')
         # print("ptr_values[ipointer]", ptr_values[ipointer])
