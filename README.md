@@ -12,6 +12,13 @@ Usage :
 python ofighters.py
 ```
 
+## Installation
+With conda
+```
+conda env create -f requirements.yml -n ofighters
+conda activate ofighters
+```
+
 ## Features :
 ![menu_demo](images/menu_demo.gif)
 
@@ -25,8 +32,9 @@ The number of iterations can be changed in ```ofighters.py``` by changing the co
 
 ##### Neural network based artificial intelligence
 
+Do not actually converge and become good but still fun to watch.
 ![simple_untrained_network](images/simple_untrained_network.gif)
 
-
+<!-- ##### Graphics -->
 
 
