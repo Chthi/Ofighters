@@ -7,24 +7,20 @@ Screenshots and captures might differ from actual version of the simulator but r
 
 ![menu_demo](images/menu_demo.gif)
 
-### Installing to try or for developpement
-From Github.
+
+## Installing for developpement
+With conda
 ```
 git clone https://github.com/Chthi/Ofighters
 cd Ofighters
+conda env create --file requirements.txt -n ofighters
+conda activate ofighters
 pip install --editable ./
 ```
 
-Usage :
+## Usage
 ```
 python -m ofighters
-```
-
-## Installation
-With conda
-```
-conda env create -f requirements.yml -n ofighters
-conda activate ofighters
 ```
 
 ## Features :
