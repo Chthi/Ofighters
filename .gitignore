@@ -1,20 +1,20 @@
 # profiling
-profiling/
+profiling/*
 
 # big model
 part3_31-07-19_BrAInet_pytorch
 
 # trained networks
-ofighter_networks/
+networks/*
 
 # records
-ofighter_records/
-
-# faistai courses
-course-v3
+records/*
 
 # pycharm
 .idea
+
+# vscode
+.vscode
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -32,7 +32,7 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
+# lib/
 lib64/
 parts/
 sdist/

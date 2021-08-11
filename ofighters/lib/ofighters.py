@@ -1,6 +1,8 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
+import os
+import sys
 from collections import namedtuple, deque
 from copy import copy, deepcopy
 
@@ -14,29 +16,27 @@ import threading
 from itertools import count
 from statistics import mean, stdev
 
-from record import OfighterRecord
-from thread_manager import spawnthread
-from couple import Couple
-from form import Circle
-from player import Player
-from battleground import Battleground
-from laser import Laser
-from action import Action
-from utils import now, debug
-from observation import DEFAULT_WIDTH, DEFAULT_HEIGHT
-from ship_image import ShipImage
-from epsilon_graph import EpsilonGraph
-from score_graph import ScoreGraph
-from action_map_graph import ActionMapGraph
-from loss_graph import LossGraph
+from ofighters.lib.record import OfighterRecord
+from ofighters.lib.thread_manager import spawnthread
+from ofighters.lib.couple import Couple
+from ofighters.lib.form import Circle
+from ofighters.lib.player import Player
+from ofighters.lib.battleground import Battleground
+from ofighters.lib.laser import Laser
+from ofighters.lib.action import Action
+from ofighters.lib.utils import now, debug
+from ofighters.lib.observation import DEFAULT_WIDTH, DEFAULT_HEIGHT
+from ofighters.lib.ship_image import ShipImage
+from ofighters.lib.epsilon_graph import EpsilonGraph
+from ofighters.lib.score_graph import ScoreGraph
+from ofighters.lib.action_map_graph import ActionMapGraph
+from ofighters.lib.loss_graph import LossGraph
 
 # from brAIn import NETWORKS_FOLDER, BrAIn, SimpleModel
-NETWORKS_FOLDER = "ofighter_networks"
+NETWORKS_FOLDER = "networks"
 
-from map_menu_struct import *
+from ofighters.lib.map_menu_struct import MapMenuStruct
 # from fps_manager import fps, fps_manager
-
-# from renforcement_learning_neural_network import Renforcement_learning_neural_network
 
 import matplotlib
 # While GTK isn't avail everywhere, we use TkAgg backend to generate png
@@ -675,7 +675,7 @@ class Ofighters(MapMenuStruct):
                 "exploration" in self.ihm:
             self.ihm["exploration"].setvar("exploration_value", self._super_bot_one.agent.trainer.epsilon.get())
             # print("DECAY TO ", self._super_bot_one.agent.trainer.epsilon.get())
-            print("position of bot", self._super_bot_one.body.x, self._super_bot_one.body.y)
+            # print("position of bot", self._super_bot_one.body.x, self._super_bot_one.body.y)
 
         # if self.fps_manager.active:
         #     self.ihm["fps"]["text"] = "FPS " + str(self.fps_manager.fps)

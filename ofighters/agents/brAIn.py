@@ -15,24 +15,12 @@ from torch.utils.data.dataset import TensorDataset
 
 import numpy as np
 
-from form import Circle
-
-from map_menu_struct import *
+from ofighters.lib.form import Circle
 
 
-import matplotlib
-# While GTK isn't avail everywhere, we use TkAgg backend to generate png
-if sys.platform != "win32" and os.getenv("DISPLAY") is None :
-    matplotlib.use("Agg")
-else :
-    matplotlib.use("TkAgg")
-import matplotlib.pyplot as plt
-import matplotlib.cm as cm
-
-
-from action import Action
-from couple import Point
-from agent import Agent
+from ofighters.lib.action import Action
+from ofighters.lib.couple import Point
+from ofighters.agents.agent import Agent
 
 
 # here you can choose the model that will be used by the bot

@@ -1,7 +1,7 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
-from couple import Couple
+from ofighters.lib.couple import Couple
 
 class Player():
     max_id = 1

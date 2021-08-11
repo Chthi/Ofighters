@@ -13,7 +13,7 @@ else :
     matplotlib.use("TkAgg")
 import matplotlib.pyplot as plt
 
-from utils import debug
+from ofighters.lib.utils import debug
 
 
 class Graph():

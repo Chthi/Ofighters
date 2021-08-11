@@ -5,20 +5,7 @@ from copy import copy, deepcopy
 
 import numpy as np
 
-from map_menu_struct import *
-
-import matplotlib
-# While GTK isn't avail everywhere, we use TkAgg backend to generate png
-if sys.platform != "win32" and os.getenv("DISPLAY") is None :
-    matplotlib.use("Agg")
-else :
-    matplotlib.use("TkAgg")
-import matplotlib.pyplot as plt
-import matplotlib.cm as cm
-
-
-
-from couple import Couple, Point
+from ofighters.lib.couple import Couple, Point
 
 DEFAULT_WIDTH = 400
 DEFAULT_HEIGHT = 400

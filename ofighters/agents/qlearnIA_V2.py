@@ -4,9 +4,8 @@
 import numpy as np
 
 from keras.models import Sequential, load_model
-from keras.backend import set_session
 from keras.layers.core import Dense, Dropout, Activation
-from keras.optimizers import RMSprop, Adam, sgd
+from keras.optimizers import RMSprop, Adam#, sgd
 from keras.layers.advanced_activations import LeakyReLU
 from keras.layers import (Input, Concatenate, Conv2D, Flatten,
                           MaxPooling2D, BatchNormalization, Reshape,
@@ -15,6 +14,7 @@ from keras.models import Model
 
 import random
 import os
+from math import log
 
 import tensorflow as tf
 
@@ -23,29 +23,37 @@ import time
 import datetime
 # from IPython.core.debugger import set_trace
 
-from action import Action
-from one_hot_action import ActionOneHot
-from couple import Point
-from agent import Agent
-from observation import DEFAULT_WIDTH, DEFAULT_HEIGHT
+from ofighters.lib.action import Action
+from ofighters.lib.one_hot_action import ActionOneHot
+from ofighters.lib.couple import Point
+from ofighters.agents.agent import Agent
+from ofighters.lib.observation import DEFAULT_WIDTH, DEFAULT_HEIGHT
+from ofighters.lib.epsilon import Epsilon_cos, Epsilon_decay
+from ofighters.lib.utils import now
 
-NETWORKS_FOLDER = "ofighter_networks"
+NETWORKS_FOLDER = "networks"
 
-flatten = lambda l: [item for sublist in l for item in sublist]
+# flatten = lambda l: [item for sublist in l for item in sublist]
 
-def now():
-    return datetime.datetime.now().strftime("%y-%m-%d-%H-%M-%S")
 
+REWARDS = {
+    "death" : 0, # -80
+    "kill" : 0, # 10
+    "aim" : 2,
+    "trajectory" : 1,
+}
 
 # defining the neural network
 class Trainer:
-    def __init__(self, name=None, learning_rate=0.001, epsilon_decay=0.9999, batch_size=30, memory_size=400):
+    def __init__(self, name=None, learning_rate=0.001, epsilon=Epsilon_decay(), batch_size=30, memory_size=400):
         self.state_size = 320008 # see observation.py
         self.action_size = 2 # see action.py
         self.gamma = 0.9
-        self.epsilon = 1.0
-        self.epsilon_min = 0.01
-        self.epsilon_decay = epsilon_decay
+
+        self.epsilon = epsilon
+        # self.epsilon_min = 0.01
+        # self.epsilon_decay = epsilon_decay
+
         self.learning_rate = learning_rate
         self.memory = deque(maxlen=memory_size)
         self.batch_size = batch_size
@@ -55,10 +63,6 @@ class Trainer:
         # to be ploted to see inside the brain of mr ship
         self.ptr_values = None
         self.act_values = None
-
-        self.session = tf.compat.v1.Session()
-        tf.compat.v1.keras.backend.set_session(self.session)
-        self.graph = tf.compat.v1.get_default_graph()
 
         architecture = "pointer_model"
 
@@ -189,30 +193,29 @@ class Trainer:
         self.model = model
         
     def decay_epsilon(self):
-        self.epsilon *= self.epsilon_decay
+        self.epsilon.next()
+        # self.epsilon *= self.epsilon_decay
     
     def get_best_action(self, obs, rand=True):
 
-        if rand and np.random.rand() <= self.epsilon:
+        if rand and np.random.rand() <= self.epsilon.get():
             # The agent acts randomly
             # return random.randrange(self.action_size)
             return random_play()
 
-        with self.session.as_default():
-            with self.graph.as_default():
-            # Predict the reward value based on the given state
-                # act_values = self.model.predict(obs.vector.T)
-                img_input = np.expand_dims(np.stack((obs.ship_map, obs.laser_map), axis=2), axis=0)
-                # act_values = self.model.predict([img_input, obs.vector[:8].T], workers=8, use_multiprocessing=True)[0]
-                [act_values_0, ptr_values_0] = self.model.predict([img_input, obs.vector[:8].T], workers=8, use_multiprocessing=True)
-                print("ptr_values_0.shape", ptr_values_0.shape)
-                # [0] to extract batch dim
-                # squeeze to remove filter dim
-                self.act_values = act_values_0[0]
-                self.ptr_values = ptr_values_0[0].squeeze()
+        # Predict the reward value based on the given state
+        # act_values = self.model.predict(obs.vector.T)
+        img_input = np.expand_dims(np.stack((obs.ship_map, obs.laser_map), axis=2), axis=0)
+        # act_values = self.model.predict([img_input, obs.vector[:8].T], workers=8, use_multiprocessing=True)[0]
+        [act_values_0, ptr_values_0] = self.model.predict([img_input, obs.vector[:8].T], workers=8, use_multiprocessing=True)
+        # print("ptr_values_0.shape", ptr_values_0.shape)
+        # [0] to extract batch dim
+        # squeeze to remove filter dim
+        self.act_values = act_values_0[0]
+        self.ptr_values = ptr_values_0[0].squeeze()
 
         # Pick the action based on the predicted reward
-        iaction =  np.argmax(self.act_values)
+        iaction = np.argmax(self.act_values)
         # print("np.argmax(ptr_values, axis=None)", np.argmax(ptr_values, axis=None))
         ipointer = np.unravel_index(np.argmax(self.ptr_values, axis=None), self.ptr_values.shape[0:2], order='F')
         # print("ptr_values[ipointer]", ptr_values[ipointer])
@@ -245,44 +248,42 @@ class Trainer:
         outputs1 = np.zeros((batch_size, self.action_size))
         outputs2 = np.zeros((batch_size, DEFAULT_WIDTH, DEFAULT_HEIGHT, 1))
 
-        with self.session.as_default():
-            with self.graph.as_default():
-                for i, (obs, iaction, ipointer, reward, next_obs, done) in enumerate(minibatch):
-                    # target = self.model.predict(obs.vector.T)[0]
+        for i, (obs, iaction, ipointer, reward, next_obs, done) in enumerate(minibatch):
+            # target = self.model.predict(obs.vector.T)[0]
 
-                    img_input = np.expand_dims(np.stack((obs.ship_map, obs.laser_map), axis=2), axis=0)
-                    # img_input = np.stack((obs.ship_map, obs.laser_map), axis=2)
-                    # img_input = np.array([obs.ship_map, obs.laser_map])
+            img_input = np.expand_dims(np.stack((obs.ship_map, obs.laser_map), axis=2), axis=0)
+            # img_input = np.stack((obs.ship_map, obs.laser_map), axis=2)
+            # img_input = np.array([obs.ship_map, obs.laser_map])
 
-                    # img_input = np.array([obs.ship_map, obs.laser_map])
-                    # print("obs.vector[:8].T.shape", obs.vector[:8].T.shape)
-                    # print("img_input", img_input)
-                    # print("img_input.shape", img_input.shape)
-                    # print("len(img_input)", len(img_input))
-                    # print("type(img_input[0])", type(img_input[0]))
+            # img_input = np.array([obs.ship_map, obs.laser_map])
+            # print("obs.vector[:8].T.shape", obs.vector[:8].T.shape)
+            # print("img_input", img_input)
+            # print("img_input.shape", img_input.shape)
+            # print("len(img_input)", len(img_input))
+            # print("type(img_input[0])", type(img_input[0]))
 
-                    # target = self.model.predict([img_input, obs.vector[:8].T], workers=8, use_multiprocessing=True)[0]
-                    [target, ptr_target] = self.model.predict([img_input, obs.vector[:8].T], workers=8, use_multiprocessing=True)
-                    # remove batch dimension
-                    target, ptr_target = target[0], ptr_target[0]
-                    # print("target", target)
-                    # print("ptr_target", ptr_target.shape)
-                    # print("target", target)
-                    # prediction = self.model.predict(next_obs.vector.T)
-                    img_input = np.expand_dims(np.stack((next_obs.ship_map, next_obs.laser_map), axis=2), axis=0)
-                    [prediction, ptr_prediction] = self.model.predict([img_input, next_obs.vector[:8].T], workers=8, use_multiprocessing=True)
-                    # remove batch dimension
-                    prediction, ptr_prediction = prediction[0], ptr_prediction[0]
-                    # print("prediction", prediction)
-                    # second term is 0 if done is true
-                    target[iaction] = reward + self.gamma * np.max(prediction) * int(not done)
-                    ptr_target[ipointer] = reward + self.gamma * np.max(ptr_prediction) * int(not done)
+            # target = self.model.predict([img_input, obs.vector[:8].T], workers=8, use_multiprocessing=True)[0]
+            [target, ptr_target] = self.model.predict([img_input, obs.vector[:8].T], workers=8, use_multiprocessing=True)
+            # remove batch dimension
+            target, ptr_target = target[0], ptr_target[0]
+            # print("target", target)
+            # print("ptr_target", ptr_target.shape)
+            # print("target", target)
+            # prediction = self.model.predict(next_obs.vector.T)
+            img_input = np.expand_dims(np.stack((next_obs.ship_map, next_obs.laser_map), axis=2), axis=0)
+            [prediction, ptr_prediction] = self.model.predict([img_input, next_obs.vector[:8].T], workers=8, use_multiprocessing=True)
+            # remove batch dimension
+            prediction, ptr_prediction = prediction[0], ptr_prediction[0]
+            # print("prediction", prediction)
+            # second term is 0 if done is true
+            target[iaction] = reward + self.gamma * np.max(prediction) * int(not done)
+            ptr_target[ipointer] = reward + self.gamma * np.max(ptr_prediction) * int(not done)
 
-                    inputs1[i] = img_input
-                    inputs2[i] = next_obs.vector[:8].T
-                    outputs1[i] = target
-                    outputs2[i] = ptr_target
-                fited = self.model.fit(x=[inputs1, inputs2], y=[outputs1, outputs2], epochs=1, batch_size=batch_size, workers=8, use_multiprocessing=True) # verbose=0
+            inputs1[i] = img_input
+            inputs2[i] = next_obs.vector[:8].T
+            outputs1[i] = target
+            outputs2[i] = ptr_target
+        fited = self.model.fit(x=[inputs1, inputs2], y=[outputs1, outputs2], epochs=1, batch_size=batch_size, workers=8, use_multiprocessing=True) # verbose=0
         return fited
 
     def save(self, id=None, overwrite=False):
@@ -293,18 +294,18 @@ class Trainer:
             name += '-' + now()
         if id:
             name += '-' + id
-        with self.session.as_default():
-            with self.graph.as_default():
-                self.model.save(NETWORKS_FOLDER + "/" + name, overwrite=overwrite)
 
+        self.model.save(NETWORKS_FOLDER + "/" + name, overwrite=overwrite)
 
-from math import log
+# decaying epsilon
 # MAX_TIME = 200
-DECAY = 0.99990
+# DECAY = 0.99990
+# print("Time before decaying to 1% :", log(0.01) / log(DECAY) / 200, "episodes." )
+
 lr = 0.0001 # 0.0001
-print("Time before decaying to 1% :", log(0.01) / log(DECAY) / 200, "episodes." )
 # TRAINER = Trainer(learning_rate=0.001, epsilon_decay=0.999995, batch_size=8)
-TRAINER = Trainer(learning_rate=lr, epsilon_decay=DECAY, batch_size=8,
+# 110 episodes period times the number of actions
+TRAINER = Trainer(learning_rate=lr, epsilon=Epsilon_cos(period=110*400), batch_size=8,
                   name="bi_head_pointer"
                   )
 
@@ -346,7 +347,7 @@ class QlearnIA(Agent):
 
         self.collecting_steps = 20
         # save model every N episodes
-        self.snapshot = 10
+        self.snapshot = 50
 
         # the neural network that can controls the ship actions
         # self.model =
@@ -360,7 +361,7 @@ class QlearnIA(Agent):
         super().reset()
         # All bots share the same trainer so we only save it once
         if self.id == 1:
-            self.epsilons.append(self.trainer.epsilon)
+            self.epsilons.append(self.trainer.epsilon.get())
         self.done = False
         # we restart so we forget the previous action
         self.previous_obs = None
@@ -381,7 +382,7 @@ class QlearnIA(Agent):
                 self.losses.append(l.history['loss'][0])
                 if self.episode % 1 == 0:
                     print("episode: {}, moves: {}, score: {}, epsilon: {}, loss: {}"
-                          .format(self.episode, self.steps, self.score, self.trainer.epsilon, self.losses[-1]))
+                          .format(self.episode, self.steps, self.score, self.trainer.epsilon.get(), self.losses[-1]))
             self.done = True
 
         if self.previous_obs is not None and self.previous_action is not None and self.previous_pointer is not None:
@@ -411,7 +412,7 @@ class QlearnIA(Agent):
                 self.losses.append(l.history['loss'][0])
                 if self.episode % 1 == 0:
                     print("episode: {}, moves: {}, score: {}, epsilon: {}, loss: {}"
-                          .format(self.episode, self.steps, self.score, self.trainer.epsilon, self.losses[-1]))
+                          .format(self.episode, self.steps, self.score, self.trainer.epsilon.get(), self.losses[-1]))
             if self.episode > 0 and self.episode % self.snapshot == 0 and self.steps < 2 :
                 self.trainer.save(id='iteration-%s' % self.episode)
 

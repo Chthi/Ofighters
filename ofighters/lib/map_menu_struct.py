@@ -13,10 +13,10 @@ import tkinter as tk
 from tkinter import ttk
 from tkinter import *
 
-from couple import Couple
-from popups import Alert
+from ofighters.lib.couple import Couple
+from ofighters.lib.popups import Alert
 
-from thread_manager import spawnthread
+from ofighters.lib.thread_manager import spawnthread
 
 # minimum sleep time between frames to garranty to not freeze the machine
 MIN_SLEEP = 0.001 # 1 ms

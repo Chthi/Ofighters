@@ -5,17 +5,6 @@ import math
 import numpy as np
 from collections import namedtuple, deque
 
-from map_menu_struct import *
-
-import matplotlib
-# While GTK isn't avail everywhere, we use TkAgg backend to generate png
-if sys.platform != "win32" and os.getenv("DISPLAY") is None :
-    matplotlib.use("Agg")
-else :
-    matplotlib.use("TkAgg")
-import matplotlib.pyplot as plt
-import matplotlib.cm as cm
-
 
 
 class ActionOneHot():

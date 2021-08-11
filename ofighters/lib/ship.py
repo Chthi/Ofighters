@@ -7,31 +7,19 @@ import math
 from random import randint, random, choice
 from math import sqrt, acos
 
-from form import Circle, sum_angles
-from couple import Point
+from ofighters.lib.form import Circle, sum_angles
+from ofighters.lib.couple import Point
 
-from map_menu_struct import *
+from ofighters.lib.laser import Laser
+from ofighters.lib.observation import DEFAULT_WIDTH, DEFAULT_HEIGHT
+from ofighters.lib.action import Action
+from ofighters.lib.one_hot_action import ActionOneHot
 
-
-import matplotlib
-# While GTK isn't avail everywhere, we use TkAgg backend to generate png
-if sys.platform != "win32" and os.getenv("DISPLAY") is None :
-    matplotlib.use("Agg")
-else :
-    matplotlib.use("TkAgg")
-import matplotlib.pyplot as plt
-import matplotlib.cm as cm
-
-from laser import Laser
-from observation import DEFAULT_WIDTH, DEFAULT_HEIGHT
-from action import Action
-from one_hot_action import ActionOneHot
-
-from agent import Agent
+from ofighters.agents.agent import Agent
 
 # from brAIn import BrAIn
 # from qlearnIA import QlearnIA
-from qlearnIA_V2 import QlearnIA, REWARDS
+from ofighters.agents.qlearnIA_V2 import QlearnIA, REWARDS
 
 SHIPS_SPEED = 8
 PLAYER_FOLLOWS_NETWORK_RULES = True

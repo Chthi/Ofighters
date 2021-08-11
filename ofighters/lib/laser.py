@@ -6,21 +6,9 @@ from math import sqrt
 
 from collections import namedtuple
 
-from form import Circle
-
-from map_menu_struct import *
-
-import matplotlib
-# While GTK isn't avail everywhere, we use TkAgg backend to generate png
-if sys.platform != "win32" and os.getenv("DISPLAY") is None :
-    matplotlib.use("Agg")
-else :
-    matplotlib.use("TkAgg")
-import matplotlib.pyplot as plt
-import matplotlib.cm as cm
-
-from couple import Point
-from qlearnIA_V2 import REWARDS
+from ofighters.lib.form import Circle
+from ofighters.lib.couple import Point
+from ofighters.agents.qlearnIA_V2 import REWARDS
 
 LIGHT_SPEED = 1 # proportionally change the speed of lasers
 

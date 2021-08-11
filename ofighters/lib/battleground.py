@@ -3,9 +3,9 @@
 
 from random import randint, random, choice
 
-from couple import Couple
-from observation import Observation, DEFAULT_WIDTH, DEFAULT_HEIGHT
-from ship import Ship
+from ofighters.lib.couple import Couple
+from ofighters.lib.observation import Observation, DEFAULT_WIDTH, DEFAULT_HEIGHT
+from ofighters.lib.ship import Ship
 
 
 class Battleground():

@@ -13,8 +13,8 @@ else :
     matplotlib.use("TkAgg")
 import matplotlib.pyplot as plt
 
-from utils import debug
-from graph import Graph
+from ofighters.lib.utils import debug
+from ofighters.lib.graph import Graph
 
 
 class EpsilonGraph(Graph):

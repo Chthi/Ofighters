@@ -15,7 +15,7 @@ else :
     matplotlib.use("TkAgg")
 import matplotlib.pyplot as plt
 
-from graph import Graph
+from ofighters.lib.graph import Graph
 
 
 class LossGraph(Graph):

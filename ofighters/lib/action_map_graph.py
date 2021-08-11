@@ -15,8 +15,8 @@ else :
     matplotlib.use("TkAgg")
 import matplotlib.pyplot as plt
 
-from graph import Graph
-from utils import debug
+from ofighters.lib.graph import Graph
+from ofighters.lib.utils import debug
 
 
 class ActionMapGraph(Graph):

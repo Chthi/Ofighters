@@ -7,23 +7,10 @@ from random import randint, random, choice
 
 import numpy as np
 
-from form import Circle
+from ofighters.lib.form import Circle
 
-from map_menu_struct import *
-
-
-import matplotlib
-# While GTK isn't avail everywhere, we use TkAgg backend to generate png
-if sys.platform != "win32" and os.getenv("DISPLAY") is None :
-    matplotlib.use("Agg")
-else :
-    matplotlib.use("TkAgg")
-import matplotlib.pyplot as plt
-import matplotlib.cm as cm
-
-
-from action import Action
-from couple import Point
+from ofighters.lib.action import Action
+from ofighters.lib.couple import Point
 
 
 
