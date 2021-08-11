@@ -6,10 +6,17 @@ Screenshots and captures might differ from actual version of the simulator but r
 
 ![random_bot_fight](images/random_bot_fight.gif)
 
+### Installing to try or for developpement
+From Github.
+```
+git clone https://github.com/Chthi/Ofighters
+cd Ofighters
+pip install --editable ./
+```
 
 Usage :
 ```
-python ofighters.py
+python -m ofighters
 ```
 
 ## Features :
